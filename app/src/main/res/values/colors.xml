@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary_background">#080C18</color>
+    <color name="secondary_background">#0D1324</color>
+    <color name="tertiary_background">#121A2E</color>
+    <color name="glass_background">#14FFFFFF</color>
+    <color name="glass_border">#24FFFFFF</color>
+
+    <color name="glass_bubble">#0FFFFFFF</color>
+    <color name="glass_bubble_border">#14FFFFFF</color>
+    <color name="glass_bubble_strong">#1FFFFFFF</color>
+
+    <color name="user_bubble_start">#66C4FF</color>
+    <color name="user_bubble_mid">#4DA8FF</color>
+    <color name="user_bubble_end">#3D8EFF</color>
+
+    <color name="ai_bubble_start">#FFFDF8</color>
+    <color name="ai_bubble_mid">#FBF7EF</color>
+    <color name="ai_bubble_end">#F3EDE0</color>
+
+    <color name="accent_glow">#8AB4FF</color>
+    <color name="accent_primary">#4A8CFF</color>
+    <color name="accent_secondary">#6E9CFF</color>
+
+    <color name="text_primary">#F0F4FF</color>
+    <color name="text_secondary">#99FFFFFF</color>
+    <color name="text_tertiary">#66FFFFFF</color>
+    <color name="text_disabled">#33FFFFFF</color>
+
+    <color name="success">#4ADE80</color>
+    <color name="warning">#FBBF24</color>
+    <color name="error">#F87171</color>
+    <color name="info">#60A5FA</color>
+
+    <color name="health_steps">#4ADE80</color>
+    <color name="health_heart_rate">#F87171</color>
+    <color name="health_sleep">#A78BFA</color>
+    <color name="health_calories">#FBBF24</color>
+    <color name="health_spo2">#60A5FA</color>
+    <color name="health_hrv">#FB923C</color>
+
+    <color name="input_field_bg">#0FFFFFFF</color>
+    <color name="status_bar">#080C18</color>
+    <color name="navigation_bar">#080C18</color>
+
+    <color name="icon_default">#99FFFFFF</color>
+    <color name="icon_active">#8AB4FF</color>
+    <color name="divider">#1FFFFFFF</color>
+
+    <color name="ripple">#1FFFFFFF</color>
+
+    <color name="shadow">#80000000</color>
+</resources>

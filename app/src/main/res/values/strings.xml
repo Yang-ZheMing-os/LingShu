@@ -1,0 +1,318 @@
+<resources>
+    <string name="app_name">灵枢</string>
+    <string name="app_subtitle">你的数字生命体</string>
+    <string name="app_description">灵枢 - 听懂人话、看懂屏幕、控制手机、主动关怀的AI伴侣</string>
+
+    <string name="accessibility_service_label">灵枢无障碍服务</string>
+    <string name="accessibility_service_description">允许灵枢读取屏幕内容、模拟操作，实现自动化控制</string>
+    <string name="notification_listener_label">灵枢通知监听</string>
+
+    <string name="nav_chat">对话</string>
+    <string name="nav_control">控制</string>
+    <string name="nav_health">健康</string>
+    <string name="nav_community">社区</string>
+    <string name="nav_settings">设置</string>
+
+    <string name="chat_hint">和灵枢说点什么…</string>
+    <string name="chat_voice_tip">长按说话</string>
+    <string name="chat_listening">正在聆听…</string>
+    <string name="chat_thinking">思考中…</string>
+    <string name="chat_speaking">播报中…</string>
+    <string name="chat_send">发送</string>
+    <string name="chat_clear">清空对话</string>
+    <string name="chat_copy">复制</string>
+    <string name="chat_regenerate">重新生成</string>
+
+    <string name="voice_wake_word">灵枢</string>
+    <string name="voice_listening_active">已唤醒，正在聆听</string>
+    <string name="voice_stt_offline">离线识别中…</string>
+    <string name="voice_stt_online">在线识别中…</string>
+    <string name="voice_tts_playing">语音播报中…</string>
+    <string name="voice_settings">语音设置</string>
+    <string name="voice_speed">语速</string>
+    <string name="voice_pitch">音调</string>
+    <string name="voice_engine">引擎</string>
+    <string name="voice_engine_system">系统TTS</string>
+    <string name="voice_engine_edge">Edge TTS</string>
+    <string name="voice_custom_wake">自定义唤醒词</string>
+
+    <string name="control_wifi">WiFi</string>
+    <string name="control_bluetooth">蓝牙</string>
+    <string name="control_flashlight">手电筒</string>
+    <string name="control_hotspot">热点</string>
+    <string name="control_nfc">NFC</string>
+    <string name="control_volume">音量</string>
+    <string name="control_brightness">亮度</string>
+    <string name="control_rotation">自动旋转</string>
+    <string name="control_apps">快捷应用</string>
+    <string name="control_scripts">自动化脚本</string>
+    <string name="control_accessibility_required">需要开启无障碍服务</string>
+
+    <string name="proactive_title">主动关怀</string>
+    <string name="proactive_enabled">启用主动关怀</string>
+    <string name="proactive_triggers">触发条件</string>
+    <string name="proactive_trigger_time">时间触发（深夜/提醒）</string>
+    <string name="proactive_trigger_behavior">行为触发（连续解锁、深夜刷手机）</string>
+    <string name="proactive_trigger_sensor">传感器触发（久坐、心率异常）</string>
+    <string name="proactive_trigger_memory">记忆触发（生日、纪念日）</string>
+    <string name="proactive_trigger_random">随机策略（避免机械感）</string>
+    <string name="proactive_cooldown">冷却时间（分钟）</string>
+    <string name="proactive_daily_limit">每日上限（次）</string>
+    <string name="proactive_model">关怀内容生成模型</string>
+
+    <string name="health_title">健康中心</string>
+    <string name="health_heart_rate">心率</string>
+    <string name="health_steps">步数</string>
+    <string name="health_sleep">睡眠</string>
+    <string name="health_calories">卡路里</string>
+    <string name="health_spo2">血氧</string>
+    <string name="health_hrv">压力指数</string>
+    <string name="health_sync">同步穿戴设备</string>
+    <string name="health_connected_required">需要Health Connect权限</string>
+
+    <string name="persona_title">人格工坊</string>
+    <string name="persona_name">名称</string>
+    <string name="persona_avatar">头像</string>
+    <string name="persona_system_prompt">系统提示词</string>
+    <string name="persona_traits">人格特质</string>
+    <string name="persona_openness">开放性</string>
+    <string name="persona_conscientiousness">尽责性</string>
+    <string name="persona_extraversion">外向性</string>
+    <string name="persona_agreeableness">宜人性</string>
+    <string name="persona_neuroticism">神经质</string>
+    <string name="persona_voice">关联音色</string>
+    <string name="persona_memory">专属记忆</string>
+    <string name="persona_opening">开场白</string>
+    <string name="persona_export">导出生人格</string>
+    <string name="persona_import">导入人格</string>
+
+    <string name="mod_title">Mod中心</string>
+    <string name="mod_browse">浏览Mod</string>
+    <string name="mod_installed">已安装</string>
+    <string name="mod_install">安装</string>
+    <string name="mod_enable">启用</string>
+    <string name="mod_disable">禁用</string>
+    <string name="mod_uninstall">卸载</string>
+    <string name="mod_update">更新</string>
+    <string name="mod_author">作者</string>
+    <string name="mod_version">版本</string>
+    <string name="mod_rating">评分</string>
+    <string name="mod_category_persona">人格</string>
+    <string name="mod_category_skill">技能</string>
+    <string name="mod_category_theme">主题</string>
+    <string name="mod_category_automation">自动化</string>
+
+    <string name="knowledge_title">本地知识库</string>
+    <string name="knowledge_add">添加文档</string>
+    <string name="knowledge_import">导入</string>
+    <string name="knowledge_query">提问</string>
+    <string name="knowledge_processing">处理中…</string>
+    <string name="knowledge_empty">暂无文档，点击添加</string>
+
+    <string name="floating_title">悬浮窗</string>
+    <string name="floating_enabled">启用悬浮窗</string>
+    <string name="floating_opacity">透明度</string>
+    <string name="floating_size">大小</string>
+    <string name="floating_permission_required">需要悬浮窗权限</string>
+
+    <string name="settings_title">设置</string>
+    <string name="settings_model">模型设置</string>
+    <string name="settings_persona">人格管理</string>
+    <string name="settings_voice">语音设置</string>
+    <string name="settings_proactive">主动关怀</string>
+    <string name="settings_health">健康设置</string>
+    <string name="settings_floating">悬浮窗</string>
+    <string name="settings_permissions">权限管理</string>
+    <string name="settings_privacy">隐私与安全</string>
+    <string name="settings_about">关于灵枢</string>
+    <string name="settings_export">导出数据</string>
+    <string name="settings_clear">清除所有数据</string>
+    <string name="settings_clear_confirm">确定要清除所有数据吗？此操作不可恢复！</string>
+    <string name="settings_update">检查更新</string>
+    <string name="settings_version">版本</string>
+
+    <string name="model_chat_default">默认对话模型</string>
+    <string name="model_vision_default">默认视觉模型</string>
+    <string name="model_stt_default">默认语音识别</string>
+    <string name="model_tts_default">默认语音合成</string>
+    <string name="model_deepseek">DeepSeek</string>
+    <string name="model_gpt4">GPT-4</string>
+    <string name="model_claude">Claude 3.5 Sonnet</string>
+    <string name="model_gemini">Gemini</string>
+    <string name="model_ollama">本地Ollama</string>
+    <string name="model_api_key">API Key</string>
+    <string name="model_api_base">API Base URL</string>
+
+    <string name="permission_microphone">麦克风权限</string>
+    <string name="permission_microphone_desc">用于语音识别和唤醒词检测</string>
+    <string name="permission_overlay">悬浮窗权限</string>
+    <string name="permission_overlay_desc">用于在其他应用上方显示悬浮球</string>
+    <string name="permission_accessibility">无障碍权限</string>
+    <string name="permission_accessibility_desc">用于读取屏幕和模拟操作</string>
+    <string name="permission_write_settings">修改系统设置</string>
+    <string name="permission_write_settings_desc">用于调节音量、亮度、WiFi等系统设置</string>
+    <string name="permission_notification">通知权限</string>
+    <string name="permission_notification_desc">用于主动提醒和状态通知</string>
+    <string name="permission_location">位置权限</string>
+    <string name="permission_location_desc">用于位置相关服务</string>
+    <string name="permission_camera">相机权限</string>
+    <string name="permission_camera_desc">用于视觉识别和拍照</string>
+    <string name="permission_contacts">联系人权限</string>
+    <string name="permission_contacts_desc">用于识别通讯录操作</string>
+    <string name="permission_sms">短信权限</string>
+    <string name="permission_sms_desc">用于发送和读取短信</string>
+    <string name="permission_phone">电话权限</string>
+    <string name="permission_phone_desc">用于拨打电话</string>
+    <string name="permission_sensors">传感器权限</string>
+    <string name="permission_sensors_desc">用于健康数据监测</string>
+    <string name="permission_activity_recognition">活动识别权限</string>
+    <string name="permission_activity_recognition_desc">用于久坐提醒等功能</string>
+    <string name="permission_storage">存储权限</string>
+    <string name="permission_storage_desc">用于知识库文档导入导出</string>
+    <string name="permission_health">健康数据权限</string>
+    <string name="permission_health_desc">用于读取健康数据同步</string>
+    <string name="permission_bluetooth">蓝牙权限</string>
+    <string name="permission_bluetooth_desc">用于连接穿戴设备和蓝牙控制</string>
+    <string name="permission_notification_listener">通知监听权限</string>
+    <string name="permission_notification_listener_desc">用于读取通知内容</string>
+
+    <string name="greeting_morning">早上好，今天想做些什么呢？</string>
+    <string name="greeting_afternoon">下午好，需要我帮忙吗？</string>
+    <string name="greeting_evening">晚上好，今天过得怎么样？</string>
+    <string name="greeting_night">夜深了，早点休息哦~</string>
+    <string name="care_late_night">还不睡吗？熬夜对身体不好哦</string>
+    <string name="care_sedentary">已经坐了很久了，起来活动一下吧</string>
+    <string name="care_heart_rate">你的心率有点高，先坐下来休息一下</string>
+    <string name="care_sleep">你最近一周睡眠都不太够，要注意休息</string>
+
+    <string name="btn_ok">确定</string>
+    <string name="btn_cancel">取消</string>
+    <string name="btn_confirm">确认</string>
+    <string name="btn_yes">是</string>
+    <string name="btn_no">否</string>
+    <string name="btn_next">下一步</string>
+    <string name="btn_back">返回</string>
+    <string name="btn_save">保存</string>
+    <string name="btn_delete">删除</string>
+    <string name="btn_edit">编辑</string>
+    <string name="btn_share">分享</string>
+    <string name="btn_refresh">刷新</string>
+    <string name="btn_retry">重试</string>
+    <string name="btn_skip">跳过</string>
+    <string name="btn_start">开始</string>
+    <string name="btn_stop">停止</string>
+    <string name="btn_allow">允许</string>
+    <string name="btn_deny">拒绝</string>
+    <string name="btn_enable">开启</string>
+    <string name="btn_disable">关闭</string>
+
+    <string name="script_title">脚本工坊</string>
+    <string name="script_record">录制操作</string>
+    <string name="script_stop_record">停止录制</string>
+    <string name="script_test">测试脚本</string>
+    <string name="script_export">导出脚本</string>
+    <string name="script_import">导入脚本</string>
+    <string name="script_example_wechat">打开微信发送消息</string>
+    <string name="script_example_takeout">点外卖流程</string>
+
+    <string name="channel_voice">语音服务</string>
+    <string name="channel_health">健康监测</string>
+    <string name="channel_floating">悬浮窗</string>
+    <string name="channel_foreground">前台服务</string>
+    <string name="channel_message">消息通知</string>
+    <string name="channel_proactive">主动关怀</string>
+
+    <string name="status_on">已开启</string>
+    <string name="status_off">已关闭</string>
+    <string name="status_connected">已连接</string>
+    <string name="status_disconnected">未连接</string>
+    <string name="status_loading">加载中…</string>
+    <string name="status_success">成功</string>
+    <string name="status_failed">失败</string>
+    <string name="status_error">出错了</string>
+
+    <string name="wifi_on">WiFi已开启</string>
+    <string name="wifi_off">WiFi已关闭</string>
+    <string name="bluetooth_on">蓝牙已开启</string>
+    <string name="bluetooth_off">蓝牙已关闭</string>
+    <string name="flashlight_on">手电筒已开启</string>
+    <string name="flashlight_off">手电筒已关闭</string>
+    <string name="hotspot_on">热点已开启</string>
+    <string name="hotspot_off">热点已关闭</string>
+
+    <string name="confirm_payment">即将执行支付操作，请确认</string>
+    <string name="confirm_delete_data">即将删除所有数据，此操作不可恢复</string>
+    <string name="confirm_uninstall">即将卸载应用</string>
+
+    <string name="onboarding_welcome">欢迎使用灵枢</string>
+    <string name="onboarding_step1_title">权限配置</string>
+    <string name="onboarding_step1_desc">灵枢需要一些权限来为您服务</string>
+    <string name="onboarding_step2_title">模型配置</string>
+    <string name="onboarding_step2_desc">选择您偏好的AI模型</string>
+    <string name="onboarding_step3_title">选择人格</string>
+    <string name="onboarding_step3_desc">选择或创建您的专属人格</string>
+    <string name="onboarding_step4_title">完成</string>
+    <string name="onboarding_step4_desc">灵枢已准备就绪</string>
+
+    <!-- ============ 主动关怀 - 通知相关 ============ -->
+    <!-- 常驻通知：待机状态 -->
+    <string name="proactive_notification_title_idle">主动关怀运行中</string>
+    <string name="proactive_notification_content_idle">待机中，未触发关怀</string>
+
+    <!-- 常驻通知：正在检测 -->
+    <string name="proactive_notification_title_checking">主动关怀检测中…</string>
+    <string name="proactive_notification_content_checking">正在检查触发条件</string>
+
+    <!-- 常驻通知：刚刚发送了关怀 -->
+    <string name="proactive_notification_title_triggered">刚刚发送了一条关怀</string>
+
+    <!-- 常驻通知：出错 -->
+    <string name="proactive_notification_title_error">主动关怀异常</string>
+
+    <!-- 通知渠道 -->
+    <string name="proactive_channel_service_name">灵枢前台服务</string>
+    <string name="proactive_channel_service_desc">灵枢应用的常驻服务通知（主动关怀、语音等）</string>
+    <string name="proactive_channel_event_name">灵枢主动关怀</string>
+    <string name="proactive_channel_event_desc">灵枢的主动关怀提醒（深夜/久坐/生日等）</string>
+
+    <!-- 通知 Action 按钮 -->
+    <string name="proactive_action_check_now">立即检测</string>
+    <string name="proactive_action_stop_service">停止关怀</string>
+    <!-- 健康监测通知 -->
+    <string name="health_notification_title_running">健康监测运行中</string>
+    <string name="health_notification_content_initializing">正在初始化健康监测服务…</string>
+    <string name="health_action_stop_monitor">停止监测</string>
+
+    <!-- ============ 语音助手通知 ============ -->
+    <string name="va_notification_title_idle">语音助手待机中</string>
+    <string name="va_notification_content_idle">说"灵枢"唤醒我</string>
+    <string name="va_notification_title_listening">正在聆听…</string>
+    <string name="va_notification_content_listening">请说出您的需求</string>
+    <string name="va_notification_title_recognizing">识别中…</string>
+    <string name="va_notification_content_recognizing">正在将语音转为文字</string>
+    <string name="va_notification_title_thinking">思考中…</string>
+    <string name="va_notification_content_thinking">正在生成回复</string>
+    <string name="va_notification_title_speaking">播报中…</string>
+    <string name="va_notification_content_speaking">正在语音播报回复</string>
+    <string name="va_notification_title_error">异常</string>
+    <string name="va_notification_content_error">语音服务出现错误</string>
+    <string name="va_action_stop_service">停止语音</string>
+    <string name="va_notification_channel_name">语音助手服务</string>
+    <string name="va_notification_channel_desc">灵枢语音助手常驻通知</string>
+
+    <!-- ============ 唤醒词通知 ============ -->
+    <string name="wakeword_notification_title_idle">唤醒词监听中</string>
+    <string name="wakeword_notification_content_idle">等待唤醒词…</string>
+    <string name="wakeword_notification_title_listening">正在聆听…</string>
+    <string name="wakeword_notification_content_listening">请说出您的需求</string>
+    <string name="wakeword_notification_title_thinking">思考中…</string>
+    <string name="wakeword_notification_content_thinking">正在生成回复</string>
+    <string name="wakeword_notification_title_speaking">播报中…</string>
+    <string name="wakeword_notification_content_speaking">正在语音播报回复</string>
+    <string name="wakeword_notification_title_error">唤醒词异常</string>
+    <string name="wakeword_notification_content_error">唤醒词服务出现错误</string>
+    <string name="wakeword_notification_channel_name">唤醒词服务</string>
+    <string name="wakeword_notification_channel_desc">灵枢唤醒词监听常驻通知</string>
+    <string name="wakeword_action_stop_service">停止监听</string>
+    <string name="wakeword_action_end_session">结束会话</string>
+</resources>

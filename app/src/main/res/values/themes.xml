@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.LingShu" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@color/status_bar</item>
+        <item name="android:navigationBarColor">@color/navigation_bar</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+        <item name="android:windowBackground">@color/primary_background</item>
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:colorEdgeEffect">@color/accent_glow</item>
+
+        <item name="colorPrimary">@color/accent_primary</item>
+        <item name="colorPrimaryContainer">@color/glass_bubble</item>
+        <item name="colorOnPrimary">@color/text_primary</item>
+        <item name="colorOnPrimaryContainer">@color/text_primary</item>
+
+        <item name="colorSecondary">@color/accent_secondary</item>
+        <item name="colorSecondaryContainer">@color/glass_bubble</item>
+        <item name="colorOnSecondary">@color/text_primary</item>
+        <item name="colorOnSecondaryContainer">@color/text_primary</item>
+
+        <item name="colorTertiary">@color/accent_glow</item>
+        <item name="colorTertiaryContainer">@color/glass_bubble_strong</item>
+        <item name="colorOnTertiary">@color/text_primary</item>
+        <item name="colorOnTertiaryContainer">@color/text_primary</item>
+
+        <item name="colorSurface">@color/secondary_background</item>
+        <item name="colorSurfaceVariant">@color/tertiary_background</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+
+        <item name="colorError">@color/error</item>
+        <item name="colorErrorContainer">@color/glass_bubble</item>
+        <item name="colorOnError">@color/text_primary</item>
+        <item name="colorOnErrorContainer">@color/error</item>
+
+        <item name="colorOutline">@color/glass_bubble_border</item>
+        <item name="colorOutlineVariant">@color/divider</item>
+
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+    </style>
+
+    <style name="Theme.LingShu.Transparent" parent="Theme.LingShu">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+
+    <style name="Theme.LingShu.Launcher" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/primary_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.LingShu</item>
+    </style>
+
+</resources>
