@@ -135,6 +135,7 @@ import kotlinx.coroutines.launch
  * - 其他状态 → 普通玻璃按钮
  */
 @Composable
+@Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
     appState: LingShuAppState,
@@ -1169,3 +1170,4 @@ private fun ChatInputBar(
         }
     }
 }
+

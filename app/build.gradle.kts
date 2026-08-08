@@ -109,8 +109,6 @@ dependencies {
     val coilVersion = "2.5.0"
     implementation("io.coil-kt:coil-compose:$coilVersion")
 
-    val healthConnectVersion = "1.1.0-alpha06"
-    implementation("androidx.health.connect:connect-client:$healthConnectVersion")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

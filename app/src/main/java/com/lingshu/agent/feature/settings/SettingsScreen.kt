@@ -118,6 +118,7 @@ import com.lingshu.agent.feature.voice.SpeechRecognizerManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Composable
 fun SettingsScreen(
     modelSettingsVM: ModelSettingsViewModel = hiltViewModel(),
     personaVM: PersonaViewModel = hiltViewModel(),
@@ -1866,3 +1867,4 @@ private fun SupportGroup(context: android.content.Context) {
         }
     }
 }
+

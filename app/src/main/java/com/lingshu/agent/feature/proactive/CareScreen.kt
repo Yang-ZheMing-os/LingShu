@@ -1,5 +1,7 @@
 package com.lingshu.agent.feature.proactive
 
+
+import androidx.compose.runtime.Composable
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +39,7 @@ import java.util.*
  * 6. 最近关怀历史记录
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Composable
 @Composable
 fun CareScreen(
     viewModel: ProactiveCareViewModel = hiltViewModel()
@@ -830,3 +833,4 @@ private fun TriggerTypeCategory.categoryDisplayName(): String = when (this) {
     TriggerTypeCategory.MEMORY -> "记忆触发"
     TriggerTypeCategory.RANDOM -> "随机关怀"
 }
+

@@ -52,6 +52,7 @@ import com.lingshu.agent.core.database.entity.ClonedVoiceEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Composable
 fun VoiceCloneScreen(
     viewModel: VoiceCloneViewModel,
     onBack: () -> Unit = {}
@@ -338,3 +339,4 @@ private fun VoiceListItem(
         }
     }
 }
+
