@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Extension
@@ -57,6 +58,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModScreen(
+    onBackClick: () -> Unit = {},
     viewModel: ModViewModel = hiltViewModel()
 ) {
     val installedMods by viewModel.installedMods.collectAsState()
@@ -72,6 +74,11 @@ fun ModScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Mod 系统") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
                 actions = {
                     IconButton(onClick = { showInstallDialog = true }) {
                         Icon(Icons.Default.Extension, contentDescription = "安装")

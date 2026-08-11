@@ -124,23 +124,23 @@ fun GuideNavGraph(
         }
 
         composable(GuideSection.Rag.route) {
-            RagScreen()
+            RagScreen(onBackClick = { navController.popBackStack() })
         }
 
         composable(GuideSection.CloneVoice.route) {
-            CloneVoiceScreen()
+            CloneVoiceScreen(onBackClick = { navController.popBackStack() })
         }
 
         composable(GuideSection.Mod.route) {
-            ModScreen()
+            ModScreen(onBackClick = { navController.popBackStack() })
         }
 
         composable(GuideSection.WakeWord.route) {
-            WakeWordScreen()
+            WakeWordScreen(onBackClick = { navController.popBackStack() })
         }
 
         composable(GuideSection.Community.route) {
-            CommunityPlaceholderScreen()
+            CommunityPlaceholderScreen(onBackClick = { navController.popBackStack() })
         }
     }
 }

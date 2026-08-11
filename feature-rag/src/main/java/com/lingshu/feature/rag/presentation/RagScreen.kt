@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
@@ -58,6 +59,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RagScreen(
+    onBackClick: () -> Unit = {},
     viewModel: RagViewModel = hiltViewModel()
 ) {
     val documents by viewModel.documents.collectAsState()
@@ -75,6 +77,11 @@ fun RagScreen(
         topBar = {
             TopAppBar(
                 title = { Text("RAG 知识库") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
                 actions = {
                     IconButton(onClick = { showUploadDialog = true }) {
                         Icon(Icons.Default.Add, contentDescription = "上传")

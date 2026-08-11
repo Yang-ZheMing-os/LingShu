@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
@@ -71,6 +72,7 @@ import java.util.concurrent.TimeUnit
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CloneVoiceScreen(
+    onBackClick: () -> Unit = {},
     viewModel: CloneVoiceViewModel = hiltViewModel()
 ) {
     val voices by viewModel.voices.collectAsState()
@@ -94,7 +96,12 @@ fun CloneVoiceScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("声音克隆") }
+                title = { Text("声音克隆") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                }
             )
         }
     ) { paddingValues ->
