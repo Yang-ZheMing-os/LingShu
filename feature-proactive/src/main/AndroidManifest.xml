@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application>
+
+        <receiver
+            android:name=".data.NotificationActionReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.lingshu.proactive.ACTION_LATE_NIGHT" />
+                <action android:name="com.lingshu.proactive.ACTION_MEAL_TIME" />
+                <action android:name="com.lingshu.proactive.ACTION_SEDENTARY" />
+                <action android:name="com.lingshu.proactive.ACTION_DARK_WALKING" />
+                <action android:name="com.lingshu.proactive.ACTION_HEART_RATE" />
+                <action android:name="com.lingshu.proactive.ACTION_STRESS" />
+                <action android:name="com.lingshu.proactive.ACTION_RAINY_DAY" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

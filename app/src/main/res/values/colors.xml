@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="splash_background">#080C18</color>
+    <color name="primary">#6C8CFF</color>
+    <color name="on_primary">#FFFFFFFF</color>
+    <color name="background">#080C18</color>
+    <color name="on_background">#E8ECF4</color>
+    <color name="surface">#101828</color>
+    <color name="on_surface">#E8ECF4</color>
+</resources>

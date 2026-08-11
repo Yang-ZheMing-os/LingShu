@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="wakeword_notification_channel_name">灵枢唤醒词服务</string>
+    <string name="wakeword_notification_channel_desc">后台运行唤醒词检测服务</string>
+    <string name="wakeword_notification_title">灵枢</string>
+    <string name="wakeword_notification_running">灵枢正在后台运行</string>
+    <string name="wakeword_notification_error">唤醒词服务异常，请检查</string>
+
+    <string name="wakeword_battery_optimization_title">电池优化白名单</string>
+    <string name="wakeword_battery_optimization_desc">为保证唤醒词功能正常工作，请将灵枢加入电池优化白名单</string>
+
+    <string name="wakeword_manufacturer_xiaomi">小米/红米</string>
+    <string name="wakeword_manufacturer_xiaomi_steps">设置 → 电池与性能 → 电池优化 → 选择"无限制"</string>
+
+    <string name="wakeword_manufacturer_huawei">华为/荣耀</string>
+    <string name="wakeword_manufacturer_huawei_steps">设置 → 电池 → 启动管理 → 找到灵枢 → 关闭自动管理 → 允许后台活动</string>
+
+    <string name="wakeword_manufacturer_oppo">OPPO/realme</string>
+    <string name="wakeword_manufacturer_oppo_steps">设置 → 电池 → 应用耗电管理 → 找到灵枢 → 允许完全后台行为</string>
+
+    <string name="wakeword_manufacturer_vivo">vivo/iQOO</string>
+    <string name="wakeword_manufacturer_vivo_steps">设置 → 电池 → 后台耗电管理 → 找到灵枢 → 选择"允许后台高耗电"</string>
+
+    <string name="wakeword_manufacturer_samsung">三星</string>
+    <string name="wakeword_manufacturer_samsung_steps">设置 → 电池和设备维护 → 电池 → 后台使用限制 → 找到灵枢 → 设为"未限制"</string>
+
+    <string name="wakeword_manufacturer_meizu">魅族</string>
+    <string name="wakeword_manufacturer_meizu_steps">手机管家 → 权限管理 → 后台管理 → 找到灵枢 → 允许后台运行</string>
+
+    <string name="wakeword_manufacturer_oneplus">一加</string>
+    <string name="wakeword_manufacturer_oneplus_steps">设置 → 电池 → 电池优化 → 找到灵枢 → 选择"不优化"</string>
+
+    <string name="wakeword_manufacturer_stock">原生 Android</string>
+    <string name="wakeword_manufacturer_stock_steps">设置 → 电池 → 电池优化 → 找到灵枢 → 选择"不优化"</string>
+
+    <string name="wakeword_default_keyword">Hey Google</string>
+</resources>

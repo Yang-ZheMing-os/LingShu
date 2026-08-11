@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">灵数无障碍服务，用于自动点击、滑动、输入文字等操作</string>
+</resources>
