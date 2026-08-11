@@ -68,7 +68,7 @@ class FloatingWindowService : Service(), IFloatingService {
         LingShuLog.d("FloatingWindowService", "Service created")
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(intent: Intent?): IBinder? = FloatingServiceBinder(this)
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return START_STICKY
@@ -363,4 +363,10 @@ class FloatingWindowService : Service(), IFloatingService {
             context.stopService(intent)
         }
     }
+}
+
+class FloatingServiceBinder(
+    private val service: FloatingWindowService
+) : android.os.Binder() {
+    fun getService(): FloatingWindowService = service
 }
