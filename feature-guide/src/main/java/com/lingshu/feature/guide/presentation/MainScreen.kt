@@ -1,18 +1,16 @@
 package com.lingshu.feature.guide.presentation
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,16 +18,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.lingshu.feature.guide.navigation.GuideNavGraph
+import com.lingshu.feature.chat.presentation.ChatScreen
 import com.lingshu.feature.guide.navigation.GuideSection
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    navController: NavHostController = rememberNavController()
+    onNavigateToRag: () -> Unit = {},
+    onNavigateToCloneVoice: () -> Unit = {},
+    onNavigateToMod: () -> Unit = {},
+    onNavigateToWakeWord: () -> Unit = {},
+    onNavigateToCommunity: () -> Unit = {},
+    onNavigateToModelSettings: () -> Unit = {}
 ) {
     val items = listOf(
         BottomNavItem.Chat,
@@ -37,51 +40,67 @@ fun MainScreen(
         BottomNavItem.Settings
     )
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            ) {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = navBackStackEntry?.destination
+    val innerNavController = rememberNavController()
 
-                items.forEach { item ->
-                    NavigationBarItem(
-                        icon = {
-                            Icon(
-                                imageVector = item.icon,
-                                contentDescription = item.label
-                            )
-                        },
-                        label = {
-                            Text(text = item.label)
-                        },
-                        selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
-                        onClick = {
-                            navController.navigate(item.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(
+            modifier = Modifier.weight(1f)
+        ) {
+            NavHost(
+                navController = innerNavController,
+                startDestination = BottomNavItem.Chat.route
+            ) {
+                composable(BottomNavItem.Chat.route) {
+                    ChatScreen()
+                }
+                composable(BottomNavItem.Control.route) {
+                    ControlScreen()
+                }
+                composable(BottomNavItem.Settings.route) {
+                    SettingsScreen(
+                        onNavigateToModelSettings = onNavigateToModelSettings,
+                        onNavigateToRag = onNavigateToRag,
+                        onNavigateToCloneVoice = onNavigateToCloneVoice,
+                        onNavigateToMod = onNavigateToMod,
+                        onNavigateToWakeWord = onNavigateToWakeWord,
+                        onNavigateToCommunity = onNavigateToCommunity
                     )
                 }
             }
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+        }
+
+        NavigationBar(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
         ) {
-            GuideNavGraph(
-                navController = navController,
-                startDestination = GuideSection.Chat.route
-            )
+            val navBackStackEntry by innerNavController.currentBackStackEntryAsState()
+            val currentDestination = navBackStackEntry?.destination
+
+            items.forEach { item ->
+                NavigationBarItem(
+                    icon = {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.label
+                        )
+                    },
+                    label = {
+                        Text(text = item.label)
+                    },
+                    selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
+                    onClick = {
+                        innerNavController.navigate(item.route) {
+                            popUpTo(innerNavController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -92,19 +111,19 @@ sealed class BottomNavItem(
     val icon: ImageVector
 ) {
     object Chat : BottomNavItem(
-        route = GuideSection.Chat.route,
+        route = "main_chat",
         label = "聊天",
         icon = Icons.Default.ChatBubble
     )
 
     object Control : BottomNavItem(
-        route = GuideSection.Control.route,
+        route = "main_control",
         label = "控制",
         icon = Icons.Default.TouchApp
     )
 
     object Settings : BottomNavItem(
-        route = GuideSection.Settings.route,
+        route = "main_settings",
         label = "设置",
         icon = Icons.Default.Settings
     )

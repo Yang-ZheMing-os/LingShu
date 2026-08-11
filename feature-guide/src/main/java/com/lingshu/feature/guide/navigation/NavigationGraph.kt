@@ -9,6 +9,7 @@ import com.lingshu.feature.clonevoice.presentation.CloneVoiceScreen
 import com.lingshu.feature.guide.presentation.CommunityPlaceholderScreen
 import com.lingshu.feature.guide.presentation.ControlScreen
 import com.lingshu.feature.guide.presentation.GuideScreen
+import com.lingshu.feature.guide.presentation.MainScreen
 import com.lingshu.feature.guide.presentation.PermissionQueueScreen
 import com.lingshu.feature.guide.presentation.SettingsScreen
 import com.lingshu.feature.guide.presentation.settings.ModelSettingsScreen
@@ -61,7 +62,26 @@ fun GuideNavGraph(
         }
 
         composable(GuideSection.Main.route) {
-            ChatScreen()
+            MainScreen(
+                onNavigateToModelSettings = {
+                    navController.navigate(GuideSection.SettingsModel.route)
+                },
+                onNavigateToRag = {
+                    navController.navigate(GuideSection.Rag.route)
+                },
+                onNavigateToCloneVoice = {
+                    navController.navigate(GuideSection.CloneVoice.route)
+                },
+                onNavigateToMod = {
+                    navController.navigate(GuideSection.Mod.route)
+                },
+                onNavigateToWakeWord = {
+                    navController.navigate(GuideSection.WakeWord.route)
+                },
+                onNavigateToCommunity = {
+                    navController.navigate(GuideSection.Community.route)
+                }
+            )
         }
 
         composable(GuideSection.Chat.route) {
