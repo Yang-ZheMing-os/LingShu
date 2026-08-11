@@ -98,7 +98,7 @@ class HealthServiceImpl @Inject constructor(
         return try {
             LingShuLog.d(TAG, "获取心率")
             if (!hasPermissions) {
-                return Result.Error(SecurityException("权限未授予"), ErrorCodes.PERMISSION_DENIED)
+                return Result.Error(ErrorCodes.PERMISSION_DENIED, "权限未授予")
             }
 
             if (useHealthConnect) {
@@ -108,7 +108,7 @@ class HealthServiceImpl @Inject constructor(
             }
         } catch (e: Exception) {
             LingShuLog.e(TAG, "获取心率失败", e)
-            Result.Error(e, ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(ErrorCodes.UNKNOWN_ERROR, e.message ?: "未知错误", e)
         }
     }
 
@@ -116,7 +116,7 @@ class HealthServiceImpl @Inject constructor(
         return try {
             LingShuLog.d(TAG, "获取步数")
             if (!hasPermissions) {
-                return Result.Error(SecurityException("权限未授予"), ErrorCodes.PERMISSION_DENIED)
+                return Result.Error(ErrorCodes.PERMISSION_DENIED, "权限未授予")
             }
 
             if (useHealthConnect) {
@@ -126,7 +126,7 @@ class HealthServiceImpl @Inject constructor(
             }
         } catch (e: Exception) {
             LingShuLog.e(TAG, "获取步数失败", e)
-            Result.Error(e, ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(ErrorCodes.UNKNOWN_ERROR, e.message ?: "未知错误", e)
         }
     }
 
@@ -134,17 +134,17 @@ class HealthServiceImpl @Inject constructor(
         return try {
             LingShuLog.d(TAG, "获取睡眠数据")
             if (!hasPermissions) {
-                return Result.Error(SecurityException("权限未授予"), ErrorCodes.PERMISSION_DENIED)
+                return Result.Error(ErrorCodes.PERMISSION_DENIED, "权限未授予")
             }
 
             if (useHealthConnect) {
                 healthConnectService.getSleep()
             } else {
-                Result.Error(UnsupportedOperationException("降级方案不支持睡眠数据"), ErrorCodes.UNKNOWN_ERROR)
+                Result.Error(ErrorCodes.UNKNOWN_ERROR, "降级方案不支持睡眠数据")
             }
         } catch (e: Exception) {
             LingShuLog.e(TAG, "获取睡眠数据失败", e)
-            Result.Error(e, ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(ErrorCodes.UNKNOWN_ERROR, e.message ?: "未知错误", e)
         }
     }
 
@@ -152,17 +152,17 @@ class HealthServiceImpl @Inject constructor(
         return try {
             LingShuLog.d(TAG, "获取血氧")
             if (!hasPermissions) {
-                return Result.Error(SecurityException("权限未授予"), ErrorCodes.PERMISSION_DENIED)
+                return Result.Error(ErrorCodes.PERMISSION_DENIED, "权限未授予")
             }
 
             if (useHealthConnect) {
                 healthConnectService.getOxygen()
             } else {
-                Result.Error(UnsupportedOperationException("降级方案不支持血氧数据"), ErrorCodes.UNKNOWN_ERROR)
+                Result.Error(ErrorCodes.UNKNOWN_ERROR, "降级方案不支持血氧数据")
             }
         } catch (e: Exception) {
             LingShuLog.e(TAG, "获取血氧失败", e)
-            Result.Error(e, ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(ErrorCodes.UNKNOWN_ERROR, e.message ?: "未知错误", e)
         }
     }
 
@@ -170,17 +170,17 @@ class HealthServiceImpl @Inject constructor(
         return try {
             LingShuLog.d(TAG, "获取压力水平")
             if (!hasPermissions) {
-                return Result.Error(SecurityException("权限未授予"), ErrorCodes.PERMISSION_DENIED)
+                return Result.Error(ErrorCodes.PERMISSION_DENIED, "权限未授予")
             }
 
             if (useHealthConnect) {
                 healthConnectService.getStressLevel()
             } else {
-                Result.Error(UnsupportedOperationException("降级方案不支持压力数据"), ErrorCodes.UNKNOWN_ERROR)
+                Result.Error(ErrorCodes.UNKNOWN_ERROR, "降级方案不支持压力数据")
             }
         } catch (e: Exception) {
             LingShuLog.e(TAG, "获取压力水平失败", e)
-            Result.Error(e, ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(ErrorCodes.UNKNOWN_ERROR, e.message ?: "未知错误", e)
         }
     }
 
@@ -196,7 +196,7 @@ class HealthServiceImpl @Inject constructor(
             Result.Success(Unit)
         } catch (e: Exception) {
             LingShuLog.e(TAG, "请求权限失败", e)
-            Result.Error(e, ErrorCodes.PERMISSION_DENIED)
+            Result.Error(ErrorCodes.PERMISSION_DENIED, e.message ?: "未知错误", e)
         }
     }
 

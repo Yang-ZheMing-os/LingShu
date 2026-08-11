@@ -5,14 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.core.common.event.FloatingSize
 import com.lingshu.core.common.event.FloatingState
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import javax.inject.Singleton
 
-@HiltViewModel
+@Singleton
 class FloatingViewModel @Inject constructor() : ViewModel() {
 
     private val _state = MutableStateFlow(FloatingState.IDLE)

@@ -345,7 +345,7 @@ class ChatTtsEngine @Inject constructor(
         // 提取 mel float 数据
         @Suppress("UNCHECKED_CAST")
         val melShape = melTensor.info.shape // e.g. [1, frames, 80]
-        val melFloat = FloatBuffer.allocate(melTensor.info.totalElements.toInt())
+        val melFloat = FloatBuffer.allocate(melShape.fold(1L) { acc, d -> acc * d }.toInt())
         melTensor.floatBuffer.get(melFloat.array())
         val melFrames = if (melShape.size >= 2) melShape[1].toInt() else melFloat.array().size / 80
         val melDim = if (melShape.size >= 3) melShape[2].toInt() else 80
@@ -377,7 +377,7 @@ class ChatTtsEngine @Inject constructor(
         val vocOutputNames = vocoderSession!!.outputNames
         val audioOutputName = vocOutputNames.first()
         val audioTensor = vocOutput.get(audioOutputName).get() as OnnxTensor
-        val audioFloatCount = audioTensor.info.totalElements.toInt()
+        val audioFloatCount = audioTensor.info.shape.fold(1L) { acc, d -> acc * d }.toInt()
         val audioFloatBuf = FloatBuffer.allocate(audioFloatCount)
         audioTensor.floatBuffer.get(audioFloatBuf.array())
         val audioFloat = audioFloatBuf.array()

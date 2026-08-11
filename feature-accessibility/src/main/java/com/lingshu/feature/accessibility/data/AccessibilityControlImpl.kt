@@ -9,9 +9,10 @@ import com.lingshu.feature.accessibility.domain.ControlInfo
 import com.lingshu.feature.accessibility.domain.IAccessibilityControl
 import com.lingshu.feature.accessibility.service.LingShuAccessibilityService
 import kotlinx.coroutines.suspendCancellableCoroutine
+import javax.inject.Inject
 import kotlin.coroutines.resume
 
-class AccessibilityControlImpl : IAccessibilityControl {
+class AccessibilityControlImpl @Inject constructor() : IAccessibilityControl {
 
     private companion object {
         private const val TAG = "AccessibilityControl"
@@ -22,8 +23,8 @@ class AccessibilityControlImpl : IAccessibilityControl {
         LingShuLog.d(TAG, "执行点击: x=$x, y=$y")
         if (!isServiceRunning()) {
             return Result.Error(
-                exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                code = ErrorCodes.ACCESSIBILITY_DISABLED
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
             )
         }
         return suspendCancellableCoroutine { continuation ->
@@ -31,8 +32,8 @@ class AccessibilityControlImpl : IAccessibilityControl {
             if (service == null) {
                 continuation.resume(
                     Result.Error(
-                        exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                        code = ErrorCodes.ACCESSIBILITY_DISABLED
+                        code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                        message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
                     )
                 )
                 return@suspendCancellableCoroutine
@@ -45,8 +46,8 @@ class AccessibilityControlImpl : IAccessibilityControl {
                     LingShuLog.e(TAG, "点击失败: x=$x, y=$y")
                     continuation.resume(
                         Result.Error(
-                            exception = RuntimeException("点击失败"),
-                            code = ErrorCodes.UNKNOWN_ERROR
+                            code = ErrorCodes.UNKNOWN_ERROR,
+                            message = "点击失败"
                         )
                     )
                 }
@@ -58,21 +59,21 @@ class AccessibilityControlImpl : IAccessibilityControl {
         LingShuLog.d(TAG, "按文本点击: $text")
         if (!isServiceRunning()) {
             return Result.Error(
-                exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                code = ErrorCodes.ACCESSIBILITY_DISABLED
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
             )
         }
         val service = LingShuAccessibilityService.getInstance() ?: return Result.Error(
-            exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-            code = ErrorCodes.ACCESSIBILITY_DISABLED
+            code = ErrorCodes.ACCESSIBILITY_DISABLED,
+            message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
         )
         return try {
             val node = findNodeByTextPriority(service, text)
             if (node == null) {
                 LingShuLog.w(TAG, "未找到控件: $text")
                 return Result.Error(
-                    exception = RuntimeException("未找到控件: $text"),
-                    code = ErrorCodes.UNKNOWN_ERROR
+                    code = ErrorCodes.UNKNOWN_ERROR,
+                    message = "未找到控件: $text"
                 )
             }
             val rect = Rect()
@@ -83,7 +84,7 @@ class AccessibilityControlImpl : IAccessibilityControl {
             tap(centerX, centerY)
         } catch (e: Exception) {
             LingShuLog.e(TAG, "按文本点击失败: $text", e)
-            Result.Error(exception = e, code = ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(code = ErrorCodes.UNKNOWN_ERROR, message = e.message ?: "按文本点击失败", cause = e)
         }
     }
 
@@ -97,8 +98,8 @@ class AccessibilityControlImpl : IAccessibilityControl {
         LingShuLog.d(TAG, "执行滑动: ($x1,$y1) -> ($x2,$y2), duration=$duration")
         if (!isServiceRunning()) {
             return Result.Error(
-                exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                code = ErrorCodes.ACCESSIBILITY_DISABLED
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
             )
         }
         return suspendCancellableCoroutine { continuation ->
@@ -106,8 +107,8 @@ class AccessibilityControlImpl : IAccessibilityControl {
             if (service == null) {
                 continuation.resume(
                     Result.Error(
-                        exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                        code = ErrorCodes.ACCESSIBILITY_DISABLED
+                        code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                        message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
                     )
                 )
                 return@suspendCancellableCoroutine
@@ -121,8 +122,8 @@ class AccessibilityControlImpl : IAccessibilityControl {
                     LingShuLog.e(TAG, "滑动失败: ($x1,$y1) -> ($x2,$y2)")
                     continuation.resume(
                         Result.Error(
-                            exception = RuntimeException("滑动失败"),
-                            code = ErrorCodes.UNKNOWN_ERROR
+                            code = ErrorCodes.UNKNOWN_ERROR,
+                            message = "滑动失败"
                         )
                     )
                 }
@@ -134,13 +135,13 @@ class AccessibilityControlImpl : IAccessibilityControl {
         LingShuLog.d(TAG, "输入文本: $text")
         if (!isServiceRunning()) {
             return Result.Error(
-                exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                code = ErrorCodes.ACCESSIBILITY_DISABLED
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
             )
         }
         val service = LingShuAccessibilityService.getInstance() ?: return Result.Error(
-            exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-            code = ErrorCodes.ACCESSIBILITY_DISABLED
+            code = ErrorCodes.ACCESSIBILITY_DISABLED,
+            message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
         )
         return try {
             val success = service.inputText(text)
@@ -150,13 +151,13 @@ class AccessibilityControlImpl : IAccessibilityControl {
             } else {
                 LingShuLog.e(TAG, "输入文本失败")
                 Result.Error(
-                    exception = RuntimeException("输入文本失败"),
-                    code = ErrorCodes.UNKNOWN_ERROR
+                    code = ErrorCodes.UNKNOWN_ERROR,
+                    message = "输入文本失败"
                 )
             }
         } catch (e: Exception) {
             LingShuLog.e(TAG, "输入文本异常", e)
-            Result.Error(exception = e, code = ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(code = ErrorCodes.UNKNOWN_ERROR, message = e.message ?: "输入文本异常", cause = e)
         }
     }
 
@@ -164,13 +165,13 @@ class AccessibilityControlImpl : IAccessibilityControl {
         LingShuLog.d(TAG, "按返回键")
         if (!isServiceRunning()) {
             return Result.Error(
-                exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                code = ErrorCodes.ACCESSIBILITY_DISABLED
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
             )
         }
         val service = LingShuAccessibilityService.getInstance() ?: return Result.Error(
-            exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-            code = ErrorCodes.ACCESSIBILITY_DISABLED
+            code = ErrorCodes.ACCESSIBILITY_DISABLED,
+            message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
         )
         return try {
             val success = service.pressBack()
@@ -180,13 +181,13 @@ class AccessibilityControlImpl : IAccessibilityControl {
             } else {
                 LingShuLog.e(TAG, "返回键失败")
                 Result.Error(
-                    exception = RuntimeException("返回键失败"),
-                    code = ErrorCodes.UNKNOWN_ERROR
+                    code = ErrorCodes.UNKNOWN_ERROR,
+                    message = "返回键失败"
                 )
             }
         } catch (e: Exception) {
             LingShuLog.e(TAG, "返回键异常", e)
-            Result.Error(exception = e, code = ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(code = ErrorCodes.UNKNOWN_ERROR, message = e.message ?: "返回键异常", cause = e)
         }
     }
 
@@ -194,13 +195,13 @@ class AccessibilityControlImpl : IAccessibilityControl {
         LingShuLog.d(TAG, "按Home键")
         if (!isServiceRunning()) {
             return Result.Error(
-                exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                code = ErrorCodes.ACCESSIBILITY_DISABLED
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
             )
         }
         val service = LingShuAccessibilityService.getInstance() ?: return Result.Error(
-            exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-            code = ErrorCodes.ACCESSIBILITY_DISABLED
+            code = ErrorCodes.ACCESSIBILITY_DISABLED,
+            message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
         )
         return try {
             val success = service.pressHome()
@@ -210,13 +211,13 @@ class AccessibilityControlImpl : IAccessibilityControl {
             } else {
                 LingShuLog.e(TAG, "Home键失败")
                 Result.Error(
-                    exception = RuntimeException("Home键失败"),
-                    code = ErrorCodes.UNKNOWN_ERROR
+                    code = ErrorCodes.UNKNOWN_ERROR,
+                    message = "Home键失败"
                 )
             }
         } catch (e: Exception) {
             LingShuLog.e(TAG, "Home键异常", e)
-            Result.Error(exception = e, code = ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(code = ErrorCodes.UNKNOWN_ERROR, message = e.message ?: "Home键异常", cause = e)
         }
     }
 
@@ -224,13 +225,13 @@ class AccessibilityControlImpl : IAccessibilityControl {
         LingShuLog.d(TAG, "获取屏幕文本")
         if (!isServiceRunning()) {
             return Result.Error(
-                exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                code = ErrorCodes.ACCESSIBILITY_DISABLED
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
             )
         }
         val service = LingShuAccessibilityService.getInstance() ?: return Result.Error(
-            exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-            code = ErrorCodes.ACCESSIBILITY_DISABLED
+            code = ErrorCodes.ACCESSIBILITY_DISABLED,
+            message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
         )
         return try {
             val text = service.getAllScreenText()
@@ -238,7 +239,7 @@ class AccessibilityControlImpl : IAccessibilityControl {
             Result.Success(text)
         } catch (e: Exception) {
             LingShuLog.e(TAG, "获取屏幕文本异常", e)
-            Result.Error(exception = e, code = ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(code = ErrorCodes.UNKNOWN_ERROR, message = e.message ?: "获取屏幕文本异常", cause = e)
         }
     }
 
@@ -246,13 +247,13 @@ class AccessibilityControlImpl : IAccessibilityControl {
         LingShuLog.d(TAG, "按文本查找控件: $text")
         if (!isServiceRunning()) {
             return Result.Error(
-                exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                code = ErrorCodes.ACCESSIBILITY_DISABLED
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
             )
         }
         val service = LingShuAccessibilityService.getInstance() ?: return Result.Error(
-            exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-            code = ErrorCodes.ACCESSIBILITY_DISABLED
+            code = ErrorCodes.ACCESSIBILITY_DISABLED,
+            message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
         )
         return try {
             val node = findNodeByTextPriority(service, text)
@@ -265,7 +266,7 @@ class AccessibilityControlImpl : IAccessibilityControl {
             Result.Success(controlInfo)
         } catch (e: Exception) {
             LingShuLog.e(TAG, "按文本查找控件异常: $text", e)
-            Result.Error(exception = e, code = ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(code = ErrorCodes.UNKNOWN_ERROR, message = e.message ?: "按文本查找控件异常", cause = e)
         }
     }
 
@@ -273,13 +274,13 @@ class AccessibilityControlImpl : IAccessibilityControl {
         LingShuLog.d(TAG, "按ID查找控件: $id")
         if (!isServiceRunning()) {
             return Result.Error(
-                exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-                code = ErrorCodes.ACCESSIBILITY_DISABLED
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
             )
         }
         val service = LingShuAccessibilityService.getInstance() ?: return Result.Error(
-            exception = IllegalStateException(ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)),
-            code = ErrorCodes.ACCESSIBILITY_DISABLED
+            code = ErrorCodes.ACCESSIBILITY_DISABLED,
+            message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
         )
         return try {
             val node = service.findNodeById(id)
@@ -292,7 +293,7 @@ class AccessibilityControlImpl : IAccessibilityControl {
             Result.Success(controlInfo)
         } catch (e: Exception) {
             LingShuLog.e(TAG, "按ID查找控件异常: $id", e)
-            Result.Error(exception = e, code = ErrorCodes.UNKNOWN_ERROR)
+            Result.Error(code = ErrorCodes.UNKNOWN_ERROR, message = e.message ?: "按ID查找控件异常", cause = e)
         }
     }
 

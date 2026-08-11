@@ -27,7 +27,7 @@ class PorcupineWakeWordEngine(
             LingShuLog.w("PorcupineWakeWord", "未配置 Porcupine AccessKey，使用降级方案")
             useFallback = true
             val result = fallbackEngine.start()
-            if (result.isSuccess()) {
+            if (result.isSuccess) {
                 running = true
             }
             return result
@@ -43,7 +43,7 @@ class PorcupineWakeWordEngine(
             LingShuLog.e("PorcupineWakeWord", "Porcupine 启动失败，切换到降级方案", e)
             useFallback = true
             val fallbackResult = fallbackEngine.start()
-            if (fallbackResult.isSuccess()) {
+            if (fallbackResult.isSuccess) {
                 running = true
             }
             return fallbackResult

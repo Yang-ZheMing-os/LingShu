@@ -20,13 +20,14 @@ import java.io.File
 import java.io.FileInputStream
 import java.security.MessageDigest
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Singleton
 class UpdateServiceImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val gitHubApi: GitHubApi,
-    private val okHttpClient: OkHttpClient
+    @Named("github") private val okHttpClient: OkHttpClient
 ) : IUpdateService {
 
     companion object {

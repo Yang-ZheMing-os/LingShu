@@ -1,38 +1,42 @@
 package com.lingshu.feature.guide.data
 
-import androidx.annotation.DrawableRes
-import androidx.annotation.StringRes
-import com.lingshu.feature.guide.R
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Handshake
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.ui.graphics.vector.ImageVector
 
 enum class GuidePage(
-    @DrawableRes val iconRes: Int,
-    @StringRes val titleRes: Int,
-    @StringRes val descriptionRes: Int
+    val icon: ImageVector,
+    val title: String,
+    val description: String
 ) {
     BRAND_INTRO(
-        iconRes = R.drawable.ic_guide_brand,
-        titleRes = R.string.guide_brand_title,
-        descriptionRes = R.string.guide_brand_description
+        icon = Icons.Outlined.SmartToy,
+        title = "品牌介绍",
+        description = "灵枢智能助手，您的专属AI伙伴"
     ),
     CORE_ABILITY(
-        iconRes = R.drawable.ic_guide_core,
-        titleRes = R.string.guide_core_title,
-        descriptionRes = R.string.guide_core_description
+        icon = Icons.Outlined.AutoAwesome,
+        title = "核心能力",
+        description = "强大的AI内核，理解您的每一个需求"
     ),
     VOICE_ABILITY(
-        iconRes = R.drawable.ic_guide_voice,
-        titleRes = R.string.guide_voice_title,
-        descriptionRes = R.string.guide_voice_description
+        icon = Icons.Outlined.GraphicEq,
+        title = "语音能力",
+        description = "自然流畅的语音交互，解放双手"
     ),
     PHONE_CONTROL(
-        iconRes = R.drawable.ic_guide_control,
-        titleRes = R.string.guide_control_title,
-        descriptionRes = R.string.guide_control_description
+        icon = Icons.Outlined.Handshake,
+        title = "手机控制",
+        description = "智能控制手机，操作从未如此简单"
     ),
     PRIVACY_PROMISE(
-        iconRes = R.drawable.ic_guide_privacy,
-        titleRes = R.string.guide_privacy_title,
-        descriptionRes = R.string.guide_privacy_description
+        icon = Icons.Outlined.Lock,
+        title = "隐私承诺",
+        description = "端侧处理，您的数据始终安全"
     );
 
     companion object {

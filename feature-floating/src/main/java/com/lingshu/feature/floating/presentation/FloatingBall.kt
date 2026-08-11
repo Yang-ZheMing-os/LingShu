@@ -42,11 +42,11 @@ fun FloatingBall(
                 contentAlignment = Alignment.Center
             ) {
                 when (state) {
-                    FloatingState.IDLE -> IdleBall(state.color, opacity, size.dp.dp)
-                    FloatingState.LISTENING -> ListeningBall(state.color, opacity, size.dp.dp)
-                    FloatingState.THINKING -> ThinkingBall(state.color, opacity, size.dp.dp)
-                    FloatingState.EXECUTING -> ExecutingBall(state.color, opacity, size.dp.dp)
-                    FloatingState.ERROR -> ErrorBall(state.color, opacity, size.dp.dp)
+                    FloatingState.IDLE -> IdleBall(Color(state.color), opacity, size.dp.dp)
+                    FloatingState.LISTENING -> ListeningBall(Color(state.color), opacity, size.dp.dp)
+                    FloatingState.THINKING -> ThinkingBall(Color(state.color), opacity, size.dp.dp)
+                    FloatingState.EXECUTING -> ExecutingBall(Color(state.color), opacity, size.dp.dp)
+                    FloatingState.ERROR -> ErrorBall(Color(state.color), opacity, size.dp.dp)
                 }
             }
         }

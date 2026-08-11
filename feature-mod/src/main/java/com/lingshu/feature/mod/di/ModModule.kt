@@ -1,5 +1,6 @@
 package com.lingshu.feature.mod.di
 
+import android.content.Context
 import com.lingshu.feature.mod.data.IScriptEngine
 import com.lingshu.feature.mod.data.IQuickJsEngine
 import com.lingshu.feature.mod.data.MockScriptEngine
@@ -9,6 +10,7 @@ import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -25,8 +27,9 @@ object ModModule {
     @Provides
     @Singleton
     fun provideModService(
-        scriptEngine: IScriptEngine
+        scriptEngine: IScriptEngine,
+        @ApplicationContext context: Context
     ): IModService {
-        return ModServiceImpl(scriptEngine)
+        return ModServiceImpl(scriptEngine, context)
     }
 }

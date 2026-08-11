@@ -11,15 +11,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Mood
-import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material.icons.filled.Walk
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -37,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -210,7 +209,7 @@ private fun StepsCard(
 ) {
     HealthMetricCard(
         title = "步数",
-        icon = Icons.Default.Walk,
+        icon = Icons.Default.Info,
         iconColor = MaterialTheme.colorScheme.primary,
         state = state,
         unit = "步",
@@ -232,7 +231,7 @@ private fun OxygenCard(
 ) {
     HealthMetricCard(
         title = "血氧",
-        icon = Icons.Default.WaterDrop,
+        icon = Icons.Default.Info,
         iconColor = MaterialTheme.colorScheme.secondary,
         state = state,
         unit = "%",
@@ -254,7 +253,7 @@ private fun StressCard(
 ) {
     HealthMetricCard(
         title = "压力",
-        icon = Icons.Default.Mood,
+        icon = Icons.Default.Info,
         iconColor = MaterialTheme.colorScheme.tertiary,
         state = state,
         unit = "级",
@@ -356,7 +355,7 @@ private fun SleepCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Default.Nightlight,
+                    Icons.Default.Info,
                     contentDescription = "睡眠",
                     tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(24.dp)

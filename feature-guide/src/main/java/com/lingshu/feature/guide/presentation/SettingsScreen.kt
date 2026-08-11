@@ -13,7 +13,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BackHand
+import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.VolumeUp
@@ -59,6 +64,11 @@ private const val SETTINGS_TAG = "SettingsScreen"
 @Composable
 fun SettingsScreen(
     onNavigateToModelSettings: () -> Unit,
+    onNavigateToRag: () -> Unit = {},
+    onNavigateToCloneVoice: () -> Unit = {},
+    onNavigateToMod: () -> Unit = {},
+    onNavigateToWakeWord: () -> Unit = {},
+    onNavigateToCommunity: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     LingShuLog.i(SETTINGS_TAG, "SettingsScreen: composing")
@@ -195,6 +205,56 @@ fun SettingsScreen(
             }
 
             item {
+                SettingsSection(title = "功能模块") {
+                    NavCard(
+                        icon = Icons.Default.Book,
+                        title = "RAG 知识库",
+                        description = "导入文档，让 AI 基于你的资料回答",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to RAG")
+                            onNavigateToRag()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.RecordVoiceOver,
+                        title = "声音克隆",
+                        description = "录制样本，克隆你的专属声音",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to CloneVoice")
+                            onNavigateToCloneVoice()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.AutoAwesome,
+                        title = "Mod 管理",
+                        description = "安装人格与技能扩展包",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to Mod")
+                            onNavigateToMod()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.BackHand,
+                        title = "唤醒词",
+                        description = "后台监听唤醒词，免手触启动",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to WakeWord")
+                            onNavigateToWakeWord()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.Campaign,
+                        title = "社区",
+                        description = "浏览与分享 Mod / 声音 / 知识库",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to Community")
+                            onNavigateToCommunity()
+                        }
+                    )
+                }
+            }
+
+            item {
                 SettingsSection(title = "关于") {
                     SettingsItem(
                         icon = Icons.Default.Settings,
@@ -228,6 +288,49 @@ private fun SettingsSection(
             modifier = Modifier.padding(horizontal = 4.dp)
         )
         content()
+    }
+}
+
+@Composable
+private fun NavCard(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 16.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = description,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
     }
 }
 

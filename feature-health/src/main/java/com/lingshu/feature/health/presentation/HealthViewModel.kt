@@ -50,7 +50,7 @@ class HealthViewModel @Inject constructor(
     fun requestPermissions() {
         viewModelScope.launch {
             val result = healthService.requestPermissions()
-            if (result.isSuccess()) {
+            if (result.isSuccess) {
                 _hasPermissions.value = true
                 loadAllData()
             }
@@ -78,7 +78,7 @@ class HealthViewModel @Inject constructor(
                     _heartRate.value = UiState.Success(result.data)
                 }
                 is Result.Error -> {
-                    _heartRate.value = UiState.Error(result.exception, result.code)
+                    _heartRate.value = UiState.Error(result.code, result.message)
                 }
             }
         }
@@ -93,7 +93,7 @@ class HealthViewModel @Inject constructor(
                     _steps.value = UiState.Success(result.data)
                 }
                 is Result.Error -> {
-                    _steps.value = UiState.Error(result.exception, result.code)
+                    _steps.value = UiState.Error(result.code, result.message)
                 }
             }
         }
@@ -108,7 +108,7 @@ class HealthViewModel @Inject constructor(
                     _sleepData.value = UiState.Success(result.data)
                 }
                 is Result.Error -> {
-                    _sleepData.value = UiState.Error(result.exception, result.code)
+                    _sleepData.value = UiState.Error(result.code, result.message)
                 }
             }
         }
@@ -123,7 +123,7 @@ class HealthViewModel @Inject constructor(
                     _oxygen.value = UiState.Success(result.data)
                 }
                 is Result.Error -> {
-                    _oxygen.value = UiState.Error(result.exception, result.code)
+                    _oxygen.value = UiState.Error(result.code, result.message)
                 }
             }
         }
@@ -138,7 +138,7 @@ class HealthViewModel @Inject constructor(
                     _stressLevel.value = UiState.Success(result.data)
                 }
                 is Result.Error -> {
-                    _stressLevel.value = UiState.Error(result.exception, result.code)
+                    _stressLevel.value = UiState.Error(result.code, result.message)
                 }
             }
         }

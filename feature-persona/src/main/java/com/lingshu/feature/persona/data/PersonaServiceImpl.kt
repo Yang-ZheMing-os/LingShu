@@ -33,18 +33,17 @@ class PersonaServiceImpl @Inject constructor(
             appPreferences.personaAssertiveness,
             appPreferences.personaHumor,
             appPreferences.personaFormality
-        ) { warmth, openness, conscientiousness, extraversion, agreeableness,
-            neuroticism, assertiveness, humor, formality ->
+        ) { values ->
             Persona(
-                warmth = warmth,
-                openness = openness,
-                conscientiousness = conscientiousness,
-                extraversion = extraversion,
-                agreeableness = agreeableness,
-                neuroticism = neuroticism,
-                assertiveness = assertiveness,
-                humor = humor,
-                formality = formality
+                warmth = values[0],
+                openness = values[1],
+                conscientiousness = values[2],
+                extraversion = values[3],
+                agreeableness = values[4],
+                neuroticism = values[5],
+                assertiveness = values[6],
+                humor = values[7],
+                formality = values[8]
             )
         }
     }

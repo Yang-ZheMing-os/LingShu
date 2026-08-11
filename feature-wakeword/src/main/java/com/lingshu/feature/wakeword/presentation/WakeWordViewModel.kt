@@ -61,21 +61,21 @@ class WakeWordViewModel @Inject constructor(
                     }
                     is Result.Error -> {
                         _engineState.value = UiState.Error(
-                            exception = result.exception,
-                            code = result.code ?: ErrorCodes.UNKNOWN_ERROR
+                            code = result.code,
+                            message = result.message
                         )
                         wakeWordEngine.unregisterListener(wakeWordListener)
                         LingShuLog.e(
                             "WakeWordViewModel",
-                            "唤醒词引擎启动失败: ${result.code}",
-                            result.exception
+                            "唤醒词引擎启动失败: ${result.code} - ${result.message}",
+                            result.cause
                         )
                     }
                 }
             } catch (e: Exception) {
                 _engineState.value = UiState.Error(
-                    exception = e,
-                    code = ErrorCodes.UNKNOWN_ERROR
+                    code = ErrorCodes.UNKNOWN_ERROR,
+                    message = e.message ?: "启动唤醒词异常"
                 )
                 LingShuLog.e("WakeWordViewModel", "启动唤醒词异常", e)
             }

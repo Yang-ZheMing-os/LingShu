@@ -51,20 +51,13 @@ class FloatingWindowService : Service(), IFloatingService {
     private var initialTouchY = 0f
     private var isDragging = false
 
-    private val savedStateRegistryController = SavedStateRegistryController.create(
-        object : LifecycleOwner {
-            override val lifecycle: Lifecycle
-                get() = serviceLifecycle
-        }
-    )
-
     private val serviceLifecycle = ServiceLifecycle()
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         serviceLifecycle.onCreate()
-        savedStateRegistryController.performRestore(null)
+        serviceLifecycle.performRestore(null)
         LingShuLog.d("FloatingWindowService", "Service created")
     }
 
@@ -118,21 +111,8 @@ class FloatingWindowService : Service(), IFloatingService {
     private fun showFloatingBall() {
         if (floatingBallView == null) {
             floatingBallView = ComposeView(this).apply {
-                setViewTreeLifecycleOwner(
-                    object : LifecycleOwner {
-                        override val lifecycle: Lifecycle
-                            get() = serviceLifecycle
-                    }
-                )
-                setViewTreeSavedStateRegistryOwner(
-                    object : SavedStateRegistryOwner {
-                        override val lifecycle: Lifecycle
-                            get() = serviceLifecycle
-
-                        override val savedStateRegistry: SavedStateRegistry
-                            get() = savedStateRegistryController.savedStateRegistry
-                    }
-                )
+                setViewTreeLifecycleOwner(serviceLifecycle)
+                setViewTreeSavedStateRegistryOwner(serviceLifecycle)
                 setContent {
                     FloatingBall(
                         state = viewModel.state.value,
@@ -220,21 +200,8 @@ class FloatingWindowService : Service(), IFloatingService {
 
         if (chatBubbleView == null) {
             chatBubbleView = ComposeView(this).apply {
-                setViewTreeLifecycleOwner(
-                    object : LifecycleOwner {
-                        override val lifecycle: Lifecycle
-                            get() = serviceLifecycle
-                    }
-                )
-                setViewTreeSavedStateRegistryOwner(
-                    object : SavedStateRegistryOwner {
-                        override val lifecycle: Lifecycle
-                            get() = serviceLifecycle
-
-                        override val savedStateRegistry: SavedStateRegistry
-                            get() = savedStateRegistryController.savedStateRegistry
-                    }
-                )
+                setViewTreeLifecycleOwner(serviceLifecycle)
+                setViewTreeSavedStateRegistryOwner(serviceLifecycle)
                 setContent {
                     FloatingChatBubble(
                         onDismiss = { hideChatBubble() },

@@ -71,7 +71,7 @@ class RagViewModel @Inject constructor(
                     loadDocuments()
                 }
                 is Result.Error -> {
-                    _uploadState.value = UiState.Error(result.exception, result.code)
+                    _uploadState.value = UiState.Error(result.code, result.message)
                 }
             }
         }
@@ -100,7 +100,7 @@ class RagViewModel @Inject constructor(
                     _askState.value = UiState.Success(result.data)
                 }
                 is Result.Error -> {
-                    _askState.value = UiState.Error(result.exception, result.code)
+                    _askState.value = UiState.Error(result.code, result.message)
                 }
             }
         }
@@ -109,7 +109,7 @@ class RagViewModel @Inject constructor(
     fun deleteDocument(documentId: String) {
         viewModelScope.launch {
             val result = ragService.deleteDocument(documentId)
-            if (result.isSuccess()) {
+            if (result.isSuccess) {
                 loadDocuments()
             }
         }

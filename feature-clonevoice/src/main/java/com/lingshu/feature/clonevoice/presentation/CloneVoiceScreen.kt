@@ -26,9 +26,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lingshu.core.common.state.UiState
 import com.lingshu.core.ui.component.GlassCard
 import com.lingshu.feature.clonevoice.domain.Voice
 import kotlinx.coroutines.delay
@@ -159,7 +160,7 @@ fun CloneVoiceScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                            imageVector = if (isRecording) Icons.Default.Star else Icons.Default.Info,
                             contentDescription = if (isRecording) "停止录音" else "开始录音",
                             tint = Color.White,
                             modifier = Modifier.size(40.dp)
@@ -296,6 +297,8 @@ private fun WaveformDisplay(
         label = "alpha"
     )
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+
     Canvas(modifier = modifier) {
         val barCount = 50
         val barWidth = size.width / barCount
@@ -312,7 +315,7 @@ private fun WaveformDisplay(
             val barHeight = amplitude * size.height * 0.8f
 
             drawRect(
-                color = MaterialTheme.colorScheme.primary.copy(
+                color = primaryColor.copy(
                     alpha = if (isRecording) animatedAlpha else 0.5f
                 ),
                 topLeft = Offset(

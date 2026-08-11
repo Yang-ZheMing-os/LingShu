@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lingshu.core.common.state.UiState
@@ -51,6 +52,7 @@ fun ChatScreen(
     val sendState by viewModel.sendState.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
     val ttsEnabled by viewModel.ttsEnabled.collectAsState()
+    val isListening by viewModel.isListening.collectAsState()
     val listState = rememberLazyListState()
 
     Scaffold(
@@ -86,7 +88,9 @@ fun ChatScreen(
                 onSend = { viewModel.sendMessage() },
                 ttsEnabled = ttsEnabled,
                 onToggleTts = { viewModel.toggleTts() },
-                enabled = !sendState.isLoading()
+                isListening = isListening,
+                onToggleVoiceInput = { viewModel.toggleVoiceInput() },
+                enabled = !sendState.isLoading
             )
         },
         containerColor = Background

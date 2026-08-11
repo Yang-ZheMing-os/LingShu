@@ -79,7 +79,7 @@ class ModViewModel @Inject constructor(
                     loadInstalledMods()
                 }
                 is Result.Error -> {
-                    _installState.value = UiState.Error(result.exception, result.code)
+                    _installState.value = UiState.Error(result.code, result.message)
                 }
             }
         }
@@ -88,7 +88,7 @@ class ModViewModel @Inject constructor(
     fun enableMod(modId: String) {
         viewModelScope.launch {
             val result = modService.enableMod(modId)
-            if (result.isSuccess()) {
+            if (result.isSuccess) {
                 loadInstalledMods()
             }
         }
@@ -97,7 +97,7 @@ class ModViewModel @Inject constructor(
     fun disableMod(modId: String) {
         viewModelScope.launch {
             val result = modService.disableMod(modId)
-            if (result.isSuccess()) {
+            if (result.isSuccess) {
                 loadInstalledMods()
             }
         }
@@ -106,7 +106,7 @@ class ModViewModel @Inject constructor(
     fun uninstallMod(modId: String) {
         viewModelScope.launch {
             val result = modService.uninstallMod(modId)
-            if (result.isSuccess()) {
+            if (result.isSuccess) {
                 loadInstalledMods()
             }
         }
@@ -122,7 +122,7 @@ class ModViewModel @Inject constructor(
                     installMod(downloadResult.data)
                 }
                 is Result.Error -> {
-                    _downloadState.value = UiState.Error(downloadResult.exception, downloadResult.code)
+                    _downloadState.value = UiState.Error(downloadResult.code, downloadResult.message)
                 }
             }
         }

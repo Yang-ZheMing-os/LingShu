@@ -172,7 +172,7 @@ class ModServiceImpl @Inject constructor(
 
     private fun scanInstalledMods(traceId: String) {
         LingShuLog.d(TAG, "[$traceId] 扫描本地 Mod 目录...")
-        val dirs = modsDir.listFiles { it.isDirectory } ?: emptyArray()
+        val dirs = modsDir.listFiles { file: File -> file.isDirectory } ?: emptyArray()
         LingShuLog.d(TAG, "[$traceId] 发现 ${dirs.size} 个子目录")
 
         dirs.forEach { dir ->

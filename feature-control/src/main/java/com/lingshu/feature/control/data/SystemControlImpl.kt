@@ -54,7 +54,7 @@ class SystemControlImpl @Inject constructor(
         timeoutMs = SYSTEM_CONTROL_TIMEOUT_MS
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val panelIntent = Intent(Settings.Panel.ACTION_BLUETOOTH).apply {
+            val panelIntent = Intent(Settings.Panel.ACTION_VOLUME).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(panelIntent)

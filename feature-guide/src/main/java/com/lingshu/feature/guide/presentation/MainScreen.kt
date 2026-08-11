@@ -66,9 +66,7 @@ fun MainScreen(
                                 launchSingleTop = true
                                 restoreState = true
                             }
-                        },
-                        selectedContentColor = MaterialTheme.colorScheme.primary,
-                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     )
                 }
             }

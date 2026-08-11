@@ -100,7 +100,7 @@ class SttViewModel @Inject constructor(
                 is Result.Error -> {
                     _errorMessage.value = result.code?.let { ErrorCodes.getMessage(it) }
                         ?: ErrorCodes.getMessage(ErrorCodes.UNKNOWN_ERROR)
-                    LingShuLog.e("SttViewModel", "消息发送失败: ${result.code}", result.exception)
+                    LingShuLog.e("SttViewModel", "消息发送失败: ${result.code}", result.cause)
                 }
             }
 

@@ -79,7 +79,7 @@ class PromptInjector @Inject constructor() {
                 msg.role == ROLE_SYSTEM && index != 0 -> {
                     LingShuLog.w(
                         TAG,
-                        "${tracePrefix}警告：第$index条消息出现非首部的system角色"
+                        "${tracePrefix}警告：第${index}条消息出现非首部的system角色"
                     )
                 }
             }

@@ -86,7 +86,7 @@ class CloneVoiceViewModel @Inject constructor(
                     loadVoices()
                 }
                 is Result.Error -> {
-                    _cloneState.value = UiState.Error(result.exception, result.code)
+                    _cloneState.value = UiState.Error(result.code, result.message)
                 }
             }
         }
@@ -95,7 +95,7 @@ class CloneVoiceViewModel @Inject constructor(
     fun setCurrentVoice(voiceId: String) {
         viewModelScope.launch {
             val result = cloneVoiceService.setCurrentVoice(voiceId)
-            if (result.isSuccess()) {
+            if (result.isSuccess) {
                 _currentVoice.value = cloneVoiceService.getCurrentVoice()
             }
         }
@@ -104,7 +104,7 @@ class CloneVoiceViewModel @Inject constructor(
     fun deleteVoice(voiceId: String) {
         viewModelScope.launch {
             val result = cloneVoiceService.deleteVoice(voiceId)
-            if (result.isSuccess()) {
+            if (result.isSuccess) {
                 loadVoices()
             }
         }
@@ -119,7 +119,7 @@ class CloneVoiceViewModel @Inject constructor(
                     _previewState.value = UiState.Success(Unit)
                 }
                 is Result.Error -> {
-                    _previewState.value = UiState.Error(result.exception, result.code)
+                    _previewState.value = UiState.Error(result.code, result.message)
                 }
             }
         }

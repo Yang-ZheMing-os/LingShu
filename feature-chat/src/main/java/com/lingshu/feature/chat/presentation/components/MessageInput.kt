@@ -1,7 +1,6 @@
 package com.lingshu.feature.chat.presentation.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,9 +8,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -36,6 +37,8 @@ fun MessageInput(
     onSend: () -> Unit,
     ttsEnabled: Boolean,
     onToggleTts: () -> Unit,
+    isListening: Boolean = false,
+    onToggleVoiceInput: () -> Unit = {},
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
@@ -52,9 +55,20 @@ fun MessageInput(
             modifier = Modifier.size(40.dp)
         ) {
             Icon(
-                imageVector = if (ttsEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                imageVector = if (ttsEnabled) Icons.Default.Star else Icons.Default.Info,
                 contentDescription = if (ttsEnabled) "关闭语音播报" else "开启语音播报",
                 tint = if (ttsEnabled) Primary else OnSurfaceVariant
+            )
+        }
+
+        IconButton(
+            onClick = onToggleVoiceInput,
+            modifier = Modifier.size(40.dp)
+        ) {
+            Icon(
+                imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                contentDescription = if (isListening) "停止语音输入" else "开始语音输入",
+                tint = if (isListening) Primary else OnSurfaceVariant
             )
         }
 
@@ -64,7 +78,7 @@ fun MessageInput(
             modifier = Modifier.weight(1f),
             placeholder = {
                 Text(
-                    text = "输入消息...",
+                    text = if (isListening) "正在聆听..." else "输入消息...",
                     color = OnSurfaceVariant,
                     fontSize = 15.sp
                 )

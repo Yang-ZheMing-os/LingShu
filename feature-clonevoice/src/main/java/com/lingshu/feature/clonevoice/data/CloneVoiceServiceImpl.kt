@@ -100,7 +100,7 @@ class CloneVoiceServiceImpl @Inject constructor(
         LingShuLog.d(TAG, "[$traceId] [加载声音] 扫描目录: ${voicesDir.absolutePath}")
 
         try {
-            val subDirs = voicesDir.listFiles { it.isDirectory }
+            val subDirs = voicesDir.listFiles { file -> file.isDirectory }
             if (subDirs.isNullOrEmpty()) {
                 LingShuLog.d(TAG, "[$traceId] [加载声音] 目录为空，使用预置 Mock 声音")
                 addMockVoices(traceId)
@@ -108,7 +108,7 @@ class CloneVoiceServiceImpl @Inject constructor(
             }
 
             LingShuLog.d(TAG, "[$traceId] [加载声音] 发现 ${subDirs.size} 个声音子目录")
-            subDirs.forEach { dir ->
+            subDirs.forEach { dir: File ->
                 try {
                     loadVoiceFromDir(dir, traceId)
                 } catch (e: Exception) {
@@ -153,7 +153,7 @@ class CloneVoiceServiceImpl @Inject constructor(
         val metadata = parseMetadata(metadataFile)
         val voice = Voice(
             id = voiceId,
-            name = metadata["name"] ?: voiceId,
+            name = (metadata["name"] as? String) ?: voiceId,
             modelPath = modelDir.absolutePath,
             samplePath = sampleFile.absolutePath,
             createdAt = (metadata["createdAt"] as? Long) ?: dir.lastModified()
@@ -191,7 +191,7 @@ class CloneVoiceServiceImpl @Inject constructor(
     // 录音相关 - 详细埋点
     // ========================================
 
-    fun startRecording(outputFile: File): Result<Unit> {
+    suspend fun startRecording(outputFile: File): Result<Unit> {
         val traceId = "rec_${System.currentTimeMillis()}"
         LingShuLog.i(TAG, "[$traceId] ===== 开始录音 =====")
         LingShuLog.d(TAG, "[$traceId] [录音] 输出文件: ${outputFile.absolutePath}")

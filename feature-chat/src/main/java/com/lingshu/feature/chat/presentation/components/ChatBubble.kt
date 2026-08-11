@@ -18,7 +18,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lingshu.core.ui.theme.OnPrimary
 import com.lingshu.core.ui.theme.Primary
-import com.lingshu.core.ui.theme.PrimaryDark
 import com.lingshu.core.common.event.Message
 import java.text.SimpleDateFormat
 import java.util.Date

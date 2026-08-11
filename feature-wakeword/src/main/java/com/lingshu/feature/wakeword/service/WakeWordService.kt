@@ -104,8 +104,8 @@ class WakeWordService : Service() {
                 is com.lingshu.core.common.error.Result.Error -> {
                     LingShuLog.e(
                         "WakeWordService",
-                        "唤醒词引擎启动失败: ${result.code}",
-                        result.exception
+                        "唤醒词引擎启动失败: ${result.code} - ${result.message}",
+                        result.cause
                     )
                     updateNotification(getString(R.string.wakeword_notification_error))
                 }

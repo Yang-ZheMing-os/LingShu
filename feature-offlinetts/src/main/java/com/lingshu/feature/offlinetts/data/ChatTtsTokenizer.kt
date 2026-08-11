@@ -164,9 +164,16 @@ class ChatTtsTokenizer private constructor(
     }
 
     private fun isPunctuation(ch: Char): Boolean {
-        return ch in "。，！？、；：""''（）【】《》〈〉…—,.!?;:\"'()[]<>" ||
-               ch.code in 0x2000..0x206F ||  // General Punctuation
-               ch.code in 0x3000..0x303F    // CJK Symbols and Punctuation
+        val punctuation = charArrayOf(
+            '。', '，', '！', '？', '、', '；', '：',
+            '\u201C', '\u201D', '\u2018', '\u2019',
+            '（', '）', '【', '】', '《', '》', '〈', '〉',
+            '…', '—',
+            ',', '.', '!', '?', ';', ':', '"', '\'', '(', ')', '[', ']', '<', '>'
+        )
+        return ch in punctuation ||
+               ch.code in 0x2000..0x206F ||
+               ch.code in 0x3000..0x303F
     }
 
     companion object {

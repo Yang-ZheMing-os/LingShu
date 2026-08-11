@@ -1,6 +1,5 @@
 package com.lingshu.feature.guide.presentation.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,9 +25,6 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,20 +50,20 @@ fun GuidePageItem(
                 .clip(RoundedCornerShape(32.dp)),
             shape = RoundedCornerShape(32.dp)
         ) {
-            Image(
-                painter = painterResource(id = page.iconRes),
+            Icon(
+                imageVector = page.icon,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(24.dp),
-                contentScale = ContentScale.Fit
+                tint = MaterialTheme.colorScheme.primary
             )
         }
 
         Spacer(modifier = Modifier.height(48.dp))
 
         Text(
-            text = stringResource(id = page.titleRes),
+            text = page.title,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -76,7 +73,7 @@ fun GuidePageItem(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = stringResource(id = page.descriptionRes),
+            text = page.description,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

@@ -11,6 +11,7 @@ import com.lingshu.feature.proactive.domain.IProactiveService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -20,7 +21,7 @@ object ProactiveModule {
 
     @Provides
     @Singleton
-    fun provideTriggerEvaluator(context: Context): TriggerEvaluator {
+    fun provideTriggerEvaluator(@ApplicationContext context: Context): TriggerEvaluator {
         return TriggerEvaluator(context)
     }
 
@@ -32,14 +33,14 @@ object ProactiveModule {
 
     @Provides
     @Singleton
-    fun provideCooldownManager(context: Context): CooldownManager {
+    fun provideCooldownManager(@ApplicationContext context: Context): CooldownManager {
         return CooldownManager(context)
     }
 
     @Provides
     @Singleton
     fun provideProactiveService(
-        context: Context,
+        @ApplicationContext context: Context,
         appPreferences: AppPreferences,
         triggerEvaluator: TriggerEvaluator,
         contentGenerator: ContentGenerator,

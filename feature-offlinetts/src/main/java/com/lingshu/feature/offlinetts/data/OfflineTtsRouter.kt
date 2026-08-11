@@ -205,7 +205,7 @@ class OfflineTtsRouter @Inject constructor(
                             }
                         }
                     } catch (e: Exception) {
-                        lastError = Result.error(ErrorCodes.MODEL_LOAD_FAILED, e.message ?: "", e)
+                        lastError = Result.Error(ErrorCodes.MODEL_LOAD_FAILED, e.message ?: "", e)
                         continue
                     }
                 } else {

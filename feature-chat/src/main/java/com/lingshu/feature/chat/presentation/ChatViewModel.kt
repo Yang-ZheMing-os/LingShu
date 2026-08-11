@@ -9,8 +9,10 @@ import com.lingshu.core.common.event.AppEvent
 import com.lingshu.core.common.event.IAppEventBus
 import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.core.common.event.IChatRepository
+import com.lingshu.core.common.event.ISttEngine
 import com.lingshu.core.common.event.ITtsEngine
 import com.lingshu.core.common.event.Message
+import com.lingshu.core.common.event.SttResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +26,7 @@ import javax.inject.Inject
 class ChatViewModel @Inject constructor(
     private val chatRepository: IChatRepository,
     private val ttsEngine: ITtsEngine,
+    private val sttEngine: ISttEngine,
     private val eventBus: IAppEventBus
 ) : ViewModel() {
 
@@ -39,6 +42,9 @@ class ChatViewModel @Inject constructor(
     private val _inputText = MutableStateFlow("")
     val inputText: StateFlow<String> = _inputText.asStateFlow()
 
+    private val _isListening = MutableStateFlow(false)
+    val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
+
     init {
         loadMessages()
     }
@@ -49,8 +55,8 @@ class ChatViewModel @Inject constructor(
                 .onStart { _messagesState.value = UiState.Loading }
                 .catch { e ->
                     _messagesState.value = UiState.Error(
-                        exception = e,
-                        code = ErrorCodes.UNKNOWN_ERROR
+                        code = ErrorCodes.UNKNOWN_ERROR,
+                        message = e.message ?: "未知错误"
                     )
                 }
                 .collect { messages ->
@@ -61,7 +67,7 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage() {
         val text = _inputText.value.trim()
-        if (text.isEmpty() || _sendState.value.isLoading()) return
+        if (text.isEmpty() || _sendState.value.isLoading) return
 
         val traceId = "chat_${System.currentTimeMillis()}"
         val stepTag = "[traceId=$traceId]"
@@ -115,13 +121,13 @@ class ChatViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _sendState.value = UiState.Error(
-                        exception = result.exception,
-                        code = result.code
+                        code = result.code,
+                        message = result.message
                     )
                     LingShuLog.e(
                         "ChatViewModel",
                         "$stepTag [step-3] 对话失败，emit AiReplyError: code=${result.code}",
-                        result.exception
+                        result.cause
                     )
                     eventBus.emit(
                         AppEvent.AiReplyError(
@@ -167,6 +173,57 @@ class ChatViewModel @Inject constructor(
             ttsEngine.stop()
             chatRepository.clearMessages()
         }
+    }
+
+    fun toggleVoiceInput() {
+        if (_isListening.value) {
+            stopVoiceInput()
+        } else {
+            startVoiceInput()
+        }
+    }
+
+    private fun startVoiceInput() {
+        if (!sttEngine.isAvailable()) {
+            LingShuLog.w("ChatViewModel", "STT 不可用")
+            _sendState.value = UiState.Error(
+                code = ErrorCodes.STT_FAILED,
+                message = "语音识别不可用"
+            )
+            return
+        }
+
+        _isListening.value = true
+        LingShuLog.d("ChatViewModel", "开始语音输入")
+
+        sttEngine.startListening(
+            onResult = { result ->
+                _isListening.value = false
+                val text = result.text.trim()
+                LingShuLog.d("ChatViewModel", "语音识别结果: $text (置信度=${result.confidence})")
+                if (text.isNotEmpty()) {
+                    _inputText.value = if (_inputText.value.isNotEmpty()) {
+                        "${_inputText.value} $text"
+                    } else {
+                        text
+                    }
+                }
+            },
+            onError = { error ->
+                _isListening.value = false
+                LingShuLog.w("ChatViewModel", "语音识别错误: $error")
+                _sendState.value = UiState.Error(
+                    code = ErrorCodes.STT_FAILED,
+                    message = error
+                )
+            }
+        )
+    }
+
+    private fun stopVoiceInput() {
+        _isListening.value = false
+        sttEngine.stopListening()
+        LingShuLog.d("ChatViewModel", "停止语音输入")
     }
 
     override fun onCleared() {

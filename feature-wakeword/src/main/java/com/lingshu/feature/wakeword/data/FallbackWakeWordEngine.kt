@@ -35,9 +35,12 @@ class FallbackWakeWordEngine(
 
         return try {
             if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+                val ex = IllegalStateException("Speech recognition not available")
+                LingShuLog.e("FallbackWakeWord", "语音识别不可用", ex)
                 return Result.Error(
-                    exception = IllegalStateException("Speech recognition not available"),
-                    code = ErrorCodes.STT_FAILED
+                    code = ErrorCodes.STT_FAILED,
+                    message = "语音识别不可用",
+                    cause = ex
                 )
             }
 
@@ -48,7 +51,7 @@ class FallbackWakeWordEngine(
             Result.Success(Unit)
         } catch (e: Exception) {
             LingShuLog.e("FallbackWakeWord", "降级唤醒词引擎启动失败", e)
-            Result.Error(exception = e, code = ErrorCodes.STT_FAILED)
+            Result.Error(code = ErrorCodes.STT_FAILED, message = e.message ?: "降级唤醒词引擎启动失败", cause = e)
         }
     }
 

@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lingshu.core.common.error.Result
 import com.lingshu.core.common.state.UiState
-import com.lingshu.core.common.error.ErrorCodes
 import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.feature.accessibility.domain.ControlInfo
 import com.lingshu.feature.accessibility.domain.IAccessibilityControl
@@ -69,10 +68,10 @@ class AccessibilityViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _actionState.value = UiState.Error(
-                        exception = result.exception,
-                        code = result.code ?: ErrorCodes.UNKNOWN_ERROR
+                        code = result.code,
+                        message = result.message
                     )
-                    LingShuLog.e(TAG, "点击失败: ${result.code}", result.exception)
+                    LingShuLog.e(TAG, "点击失败: ${result.code}", result.cause)
                 }
             }
         }
@@ -88,10 +87,10 @@ class AccessibilityViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _actionState.value = UiState.Error(
-                        exception = result.exception,
-                        code = result.code ?: ErrorCodes.UNKNOWN_ERROR
+                        code = result.code,
+                        message = result.message
                     )
-                    LingShuLog.e(TAG, "按文本点击失败: ${result.code}", result.exception)
+                    LingShuLog.e(TAG, "按文本点击失败: ${result.code}", result.cause)
                 }
             }
         }
@@ -107,10 +106,10 @@ class AccessibilityViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _actionState.value = UiState.Error(
-                        exception = result.exception,
-                        code = result.code ?: ErrorCodes.UNKNOWN_ERROR
+                        code = result.code,
+                        message = result.message
                     )
-                    LingShuLog.e(TAG, "滑动失败: ${result.code}", result.exception)
+                    LingShuLog.e(TAG, "滑动失败: ${result.code}", result.cause)
                 }
             }
         }
@@ -126,10 +125,10 @@ class AccessibilityViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _actionState.value = UiState.Error(
-                        exception = result.exception,
-                        code = result.code ?: ErrorCodes.UNKNOWN_ERROR
+                        code = result.code,
+                        message = result.message
                     )
-                    LingShuLog.e(TAG, "输入文本失败: ${result.code}", result.exception)
+                    LingShuLog.e(TAG, "输入文本失败: ${result.code}", result.cause)
                 }
             }
         }
@@ -145,10 +144,10 @@ class AccessibilityViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _actionState.value = UiState.Error(
-                        exception = result.exception,
-                        code = result.code ?: ErrorCodes.UNKNOWN_ERROR
+                        code = result.code,
+                        message = result.message
                     )
-                    LingShuLog.e(TAG, "返回键失败: ${result.code}", result.exception)
+                    LingShuLog.e(TAG, "返回键失败: ${result.code}", result.cause)
                 }
             }
         }
@@ -164,10 +163,10 @@ class AccessibilityViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _actionState.value = UiState.Error(
-                        exception = result.exception,
-                        code = result.code ?: ErrorCodes.UNKNOWN_ERROR
+                        code = result.code,
+                        message = result.message
                     )
-                    LingShuLog.e(TAG, "Home键失败: ${result.code}", result.exception)
+                    LingShuLog.e(TAG, "Home键失败: ${result.code}", result.cause)
                 }
             }
         }
@@ -184,10 +183,10 @@ class AccessibilityViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _actionState.value = UiState.Error(
-                        exception = result.exception,
-                        code = result.code ?: ErrorCodes.UNKNOWN_ERROR
+                        code = result.code,
+                        message = result.message
                     )
-                    LingShuLog.e(TAG, "获取屏幕文本失败: ${result.code}", result.exception)
+                    LingShuLog.e(TAG, "获取屏幕文本失败: ${result.code}", result.cause)
                 }
             }
         }
@@ -204,10 +203,10 @@ class AccessibilityViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _actionState.value = UiState.Error(
-                        exception = result.exception,
-                        code = result.code ?: ErrorCodes.UNKNOWN_ERROR
+                        code = result.code,
+                        message = result.message
                     )
-                    LingShuLog.e(TAG, "查找控件失败: ${result.code}", result.exception)
+                    LingShuLog.e(TAG, "查找控件失败: ${result.code}", result.cause)
                 }
             }
         }
@@ -224,10 +223,10 @@ class AccessibilityViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _actionState.value = UiState.Error(
-                        exception = result.exception,
-                        code = result.code ?: ErrorCodes.UNKNOWN_ERROR
+                        code = result.code,
+                        message = result.message
                     )
-                    LingShuLog.e(TAG, "按ID查找控件失败: ${result.code}", result.exception)
+                    LingShuLog.e(TAG, "按ID查找控件失败: ${result.code}", result.cause)
                 }
             }
         }

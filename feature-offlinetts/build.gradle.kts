@@ -43,6 +43,9 @@ dependencies {
     // JSON 解析（tokenizer.json）
     implementation("org.json:json:20240303")
 
+    // OkHttp（EdgeTtsEngine WebSocket）
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")

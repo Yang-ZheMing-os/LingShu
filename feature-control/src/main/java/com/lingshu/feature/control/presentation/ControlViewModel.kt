@@ -1,5 +1,6 @@
 package com.lingshu.feature.control.presentation
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lingshu.core.common.state.UiState
@@ -11,6 +12,7 @@ import com.lingshu.feature.control.domain.ICommandParser
 import com.lingshu.feature.control.domain.ISystemControl
 import com.lingshu.feature.control.domain.SystemAction
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +21,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ControlViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val systemControl: ISystemControl,
     private val commandParser: ICommandParser
 ) : ViewModel() {
@@ -40,8 +43,8 @@ class ControlViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _controlState.value = UiState.Error(
-                        exception = result.cause ?: Exception(result.message),
-                        code = result.code
+                        code = result.code,
+                        message = result.message
                     )
                     LingShuLog.e("ControlViewModel", "指令执行失败: ${result.code} - ${result.message}", result.cause)
                 }
@@ -100,9 +103,10 @@ class ControlViewModel @Inject constructor(
 
     private fun getCurrentBrightness(): Int {
         return try {
-            val contentResolver = android.content.ContentResolver::class.java
-            val settings = android.provider.Settings.System::class.java
-            val brightness = settings.getInt(null, android.provider.Settings.System.SCREEN_BRIGHTNESS)
+            val brightness = android.provider.Settings.System.getInt(
+                context.contentResolver,
+                android.provider.Settings.System.SCREEN_BRIGHTNESS
+            )
             (brightness / 255f * 100).toInt()
         } catch (e: Exception) {
             LingShuLog.w("ControlViewModel", "获取当前亮度失败", e)
@@ -112,7 +116,7 @@ class ControlViewModel @Inject constructor(
 
     private fun getCurrentVolume(): Int {
         return try {
-            val audioManager = android.media.AudioManager::class.java
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
             val maxVolume = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
             val currentVolume = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
             (currentVolume / maxVolume.toFloat() * 100).toInt()

@@ -155,7 +155,7 @@ class ChatRepository @Inject constructor(
 
         for (i in RETRY_DELAYS.indices) {
             val attemptStartTime = System.currentTimeMillis()
-            val provider = llmRouter.resolve(config.provider)
+            val provider = llmRouter.getProvider(config.provider)
 
             if (provider == null || !provider.isAvailable(config)) {
                 LingShuLog.w(
@@ -186,12 +186,12 @@ class ChatRepository @Inject constructor(
             val attemptCost = System.currentTimeMillis() - attemptStartTime
 
             when (callResult) {
-                is Result.Success -> {
+                is Result.Success<*> -> {
                     val totalCost = System.currentTimeMillis() - totalStart
                     LingShuLog.i(
                         TAG,
                         "${tracePrefix}LLM调用成功, attempt=${i + 1}, " +
-                                "replyLength=${callResult.data.length}, " +
+                                "replyLength=${callResult.data?.toString()?.length ?: 0}, " +
                                 "attemptCost=${attemptCost}ms, totalCost=${totalCost}ms"
                     )
                     return callResult

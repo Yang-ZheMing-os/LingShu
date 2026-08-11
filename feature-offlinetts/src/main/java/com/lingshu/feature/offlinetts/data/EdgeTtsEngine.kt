@@ -174,7 +174,7 @@ class EdgeTtsEngine @Inject constructor(
             outputFile.parentFile?.mkdirs()
             outputFile.writeBytes(audioBytes)
 
-            val audioSec = estimateAudioSec(audioBytes, sr, currentConfig?.format ?: "wav")
+            val audioSec = estimateAudioSec(audioBytes.size, sr, currentConfig?.format ?: "wav")
             val totalMs = System.currentTimeMillis() - startTime
             val rta = if (audioSec > 0) totalMs / (audioSec * 1000.0) else 0.0
             LingShuLog.i(
@@ -486,7 +486,7 @@ class EdgeTtsEngine @Inject constructor(
         while (i < samples) {
             var s = 0
             for (c in 0 until channels) {
-                s += if (bits == 16) bb.short.toInt() else ((bb.get().toInt() and 0xFF) - 128) * 256
+                s += if (bits.toInt() == 16) bb.short.toInt() else ((bb.get().toInt() and 0xFF) - 128) * 256
             }
             s /= channels
             pcm[i] = s.toShort()

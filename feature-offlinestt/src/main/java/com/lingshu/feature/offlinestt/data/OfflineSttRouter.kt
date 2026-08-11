@@ -206,7 +206,7 @@ class OfflineSttRouter @Inject constructor(
                         }
                     }
                 } catch (e: Exception) {
-                    lastError = Result.error(ErrorCodes.MODEL_LOAD_FAILED, e.message ?: "load error", e)
+                    lastError = Result.Error(ErrorCodes.MODEL_LOAD_FAILED, e.message ?: "load error", e)
                     continue
                 }
             }

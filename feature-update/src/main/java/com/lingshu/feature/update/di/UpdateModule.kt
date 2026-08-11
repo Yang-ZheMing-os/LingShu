@@ -14,6 +14,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Module
@@ -31,6 +32,7 @@ abstract class UpdateModule {
 
         @Provides
         @Singleton
+        @Named("github")
         fun provideGitHubOkHttpClient(): OkHttpClient {
             val loggingInterceptor = HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.BASIC
@@ -47,7 +49,7 @@ abstract class UpdateModule {
         @Provides
         @Singleton
         fun provideGitHubApi(
-            okHttpClient: OkHttpClient
+            @Named("github") okHttpClient: OkHttpClient
         ): GitHubApi {
             return Retrofit.Builder()
                 .baseUrl(GITHUB_API_BASE_URL)

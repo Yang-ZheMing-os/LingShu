@@ -1,9 +1,5 @@
 package com.lingshu.feature.chat.di
 
-import com.lingshu.core.data.llm.DeepSeekProvider
-import com.lingshu.core.data.llm.ILlmProvider
-import com.lingshu.core.data.llm.LlmRouter
-import com.lingshu.core.data.llm.ModelProviderType
 import com.lingshu.feature.chat.data.ChatRepository
 import com.lingshu.feature.chat.data.TtsEngineImpl
 import com.lingshu.feature.chat.data.prompt.IPromptAssembler
@@ -46,21 +42,6 @@ abstract class ChatModule {
         @Singleton
         fun providePromptInjector(): PromptInjector {
             return PromptInjector()
-        }
-
-        @Provides
-        @Singleton
-        fun provideLlmRouter(
-            deepSeekProvider: DeepSeekProvider
-        ): LlmRouter {
-            val providerMap = mapOf<ModelProviderType, ILlmProvider>(
-                ModelProviderType.DEEPSEEK to deepSeekProvider
-            )
-            return object : LlmRouter {
-                override fun resolve(type: ModelProviderType): ILlmProvider? {
-                    return providerMap[type]
-                }
-            }
         }
     }
 }

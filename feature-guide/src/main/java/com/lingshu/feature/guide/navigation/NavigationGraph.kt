@@ -5,11 +5,16 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.lingshu.feature.chat.presentation.ChatScreen
+import com.lingshu.feature.clonevoice.presentation.CloneVoiceScreen
+import com.lingshu.feature.guide.presentation.CommunityPlaceholderScreen
 import com.lingshu.feature.guide.presentation.ControlScreen
 import com.lingshu.feature.guide.presentation.GuideScreen
 import com.lingshu.feature.guide.presentation.PermissionQueueScreen
 import com.lingshu.feature.guide.presentation.SettingsScreen
 import com.lingshu.feature.guide.presentation.settings.ModelSettingsScreen
+import com.lingshu.feature.mod.presentation.ModScreen
+import com.lingshu.feature.rag.presentation.RagScreen
+import com.lingshu.feature.wakeword.presentation.WakeWordScreen
 
 sealed class GuideSection(val route: String) {
     object Guide : GuideSection("guide")
@@ -19,6 +24,11 @@ sealed class GuideSection(val route: String) {
     object Control : GuideSection("control")
     object Settings : GuideSection("settings")
     object SettingsModel : GuideSection("settings_model")
+    object Rag : GuideSection("rag")
+    object CloneVoice : GuideSection("clone_voice")
+    object Mod : GuideSection("mod")
+    object WakeWord : GuideSection("wake_word")
+    object Community : GuideSection("community")
 }
 
 @Composable
@@ -50,6 +60,10 @@ fun GuideNavGraph(
             )
         }
 
+        composable(GuideSection.Main.route) {
+            ChatScreen()
+        }
+
         composable(GuideSection.Chat.route) {
             ChatScreen()
         }
@@ -62,6 +76,21 @@ fun GuideNavGraph(
             SettingsScreen(
                 onNavigateToModelSettings = {
                     navController.navigate(GuideSection.SettingsModel.route)
+                },
+                onNavigateToRag = {
+                    navController.navigate(GuideSection.Rag.route)
+                },
+                onNavigateToCloneVoice = {
+                    navController.navigate(GuideSection.CloneVoice.route)
+                },
+                onNavigateToMod = {
+                    navController.navigate(GuideSection.Mod.route)
+                },
+                onNavigateToWakeWord = {
+                    navController.navigate(GuideSection.WakeWord.route)
+                },
+                onNavigateToCommunity = {
+                    navController.navigate(GuideSection.Community.route)
                 }
             )
         }
@@ -72,6 +101,26 @@ fun GuideNavGraph(
                     navController.popBackStack()
                 }
             )
+        }
+
+        composable(GuideSection.Rag.route) {
+            RagScreen()
+        }
+
+        composable(GuideSection.CloneVoice.route) {
+            CloneVoiceScreen()
+        }
+
+        composable(GuideSection.Mod.route) {
+            ModScreen()
+        }
+
+        composable(GuideSection.WakeWord.route) {
+            WakeWordScreen()
+        }
+
+        composable(GuideSection.Community.route) {
+            CommunityPlaceholderScreen()
         }
     }
 }

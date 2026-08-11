@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.lingshu.core.common.error.Result
+import com.lingshu.core.common.error.Result as ApiResult
 import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.feature.update.domain.IUpdateService
 import dagger.assisted.Assisted
@@ -30,14 +30,14 @@ class UpdateCheckWorker @AssistedInject constructor(
             val showNotification = inputData.getBoolean(KEY_SHOW_NOTIFICATION, false)
 
             when (val result = updateService.checkForUpdate()) {
-                is Result.Success -> {
+                is ApiResult.Success -> {
                     val updateInfo = result.data
                     LingShuLog.i(TAG, "发现新版本: ${updateInfo.version}")
                     if (showNotification) {
                     }
                     Result.success()
                 }
-                is Result.Error -> {
+                is ApiResult.Error -> {
                     LingShuLog.w(TAG, "检查更新失败: ${result.message}")
                     Result.success()
                 }

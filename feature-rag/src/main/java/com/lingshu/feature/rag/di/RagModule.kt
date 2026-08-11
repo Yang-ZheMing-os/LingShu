@@ -1,31 +1,29 @@
 package com.lingshu.feature.rag.di
 
+import com.lingshu.feature.rag.data.HashBasedEmbeddingEngine
 import com.lingshu.feature.rag.data.IEmbeddingEngine
 import com.lingshu.feature.rag.data.IEmbeddingGemma
-import com.lingshu.feature.rag.data.MockEmbeddingEngine
 import com.lingshu.feature.rag.data.RagServiceImpl
 import com.lingshu.feature.rag.domain.IRagService
+import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object RagModule {
+abstract class RagModule {
 
-    @Provides
+    @Binds
     @Singleton
-    fun provideEmbeddingEngine(): IEmbeddingEngine {
-        return MockEmbeddingEngine()
-    }
+    abstract fun bindEmbeddingEngine(
+        engine: HashBasedEmbeddingEngine
+    ): IEmbeddingEngine
 
-    @Provides
+    @Binds
     @Singleton
-    fun provideRagService(
-        embeddingEngine: IEmbeddingEngine
-    ): IRagService {
-        return RagServiceImpl(embeddingEngine)
-    }
+    abstract fun bindRagService(
+        impl: RagServiceImpl
+    ): IRagService
 }
