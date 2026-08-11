@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  主动关怀通知栏用「停止服务」Action 图标（停止/关闭）
+  说明：占位图标，建议后续替换为设计稿统一风格的矢量图
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#757575">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M18.3,5.71L12,12.01l-6.3,-6.3c-0.39,-0.39 -1.02,-0.39 -1.41,0 -0.39,0.39 -0.39,1.02 0,1.41L10.59,13.42 4.29,19.72c-0.39,0.39 -0.39,1.02 0,1.41 0.39,0.39 1.02,0.39 1.41,0L13.41,14.83l6.3,6.3c0.39,0.39 1.02,0.39 1.41,0 0.39,-0.39 0.39,-1.02 0,-1.41L14.83,13.42l6.29,-6.3c0.39,-0.39 0.39,-1.02 0,-1.41 -0.38,-0.38 -1.02,-0.38 -1.41,0.01z" />
+</vector>
