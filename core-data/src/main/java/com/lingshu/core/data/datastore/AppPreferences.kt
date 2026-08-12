@@ -23,6 +23,26 @@ class AppPreferences(private val context: Context) {
             preferences[API_KEY] ?: ""
         }
 
+    val llmProvider: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[LLM_PROVIDER] ?: "OLLAMA"
+        }
+
+    val ollamaUrl: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[OLLAMA_URL] ?: "http://10.0.2.2:11434"
+        }
+
+    val ollamaModel: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[OLLAMA_MODEL] ?: "qwen2.5:0.5b"
+        }
+
+    val geminiApiKey: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[GEMINI_API_KEY] ?: ""
+        }
+
     val personaWarmth: Flow<Float> = context.dataStore.data
         .map { preferences ->
             preferences[PERSONA_WARMTH] ?: 0.5f
@@ -80,6 +100,30 @@ class AppPreferences(private val context: Context) {
         }
     }
 
+    suspend fun setLlmProvider(provider: String) {
+        context.dataStore.edit { preferences ->
+            preferences[LLM_PROVIDER] = provider
+        }
+    }
+
+    suspend fun setOllamaUrl(url: String) {
+        context.dataStore.edit { preferences ->
+            preferences[OLLAMA_URL] = url
+        }
+    }
+
+    suspend fun setOllamaModel(model: String) {
+        context.dataStore.edit { preferences ->
+            preferences[OLLAMA_MODEL] = model
+        }
+    }
+
+    suspend fun setGeminiApiKey(key: String) {
+        context.dataStore.edit { preferences ->
+            preferences[GEMINI_API_KEY] = key
+        }
+    }
+
     suspend fun setPersonaTrait(key: androidx.datastore.preferences.core.Preferences.Key<Float>, value: Float) {
         context.dataStore.edit { preferences ->
             preferences[key] = value.coerceIn(0f, 1f)
@@ -107,6 +151,10 @@ class AppPreferences(private val context: Context) {
     companion object {
         private val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
         private val API_KEY = stringPreferencesKey("api_key")
+        private val LLM_PROVIDER = stringPreferencesKey("llm_provider")
+        private val OLLAMA_URL = stringPreferencesKey("ollama_url")
+        private val OLLAMA_MODEL = stringPreferencesKey("ollama_model")
+        private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
 
         val PERSONA_WARMTH = floatPreferencesKey("persona_warmth")
         val PERSONA_OPENNESS = floatPreferencesKey("persona_openness")

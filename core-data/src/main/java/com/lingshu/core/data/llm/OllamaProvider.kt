@@ -331,6 +331,56 @@ class OllamaProvider @Inject constructor(
         return valid
     }
 
+    /**
+     * 从 Ollama 服务拉取已安装的本地模型列表（GET /api/tags）。
+     * 用于在设置页让用户从可用模型中选择，而非手动输入。
+     */
+    suspend fun listInstalledModels(baseUrl: String): Result<List<String>> = withContext(ioDispatcher) {
+        val tag = "listModels"
+        val normalized = normalizeBaseUrl(baseUrl.ifBlank { DEFAULT_BASE_URL })
+        val url = "$normalized/api/tags"
+
+        LingShuLog.i(moduleTag, "[$tag] GET $url")
+
+        val client = createClient(10)
+        val request = Request.Builder().url(url).get().build()
+
+        try {
+            val response = client.newCall(request).execute()
+            val httpCode = response.code
+            val body = response.body?.string() ?: ""
+            response.close()
+
+            if (!response.isSuccessful) {
+                LingShuLog.e(moduleTag, "[$tag] HTTP $httpCode | body=${body.take(200)}")
+                return@withContext Result.error(
+                    code = ErrorCodes.SERVER_NO_RESPONSE,
+                    message = "HTTP $httpCode: ${parseOllamaErrorMessage(body)}"
+                )
+            }
+
+            val json = JSONObject(body)
+            val modelsArr = json.optJSONArray("models")
+            val models = mutableListOf<String>()
+            if (modelsArr != null) {
+                for (i in 0 until modelsArr.length()) {
+                    val name = modelsArr.optJSONObject(i)?.optString("name")
+                    if (!name.isNullOrBlank()) models.add(name)
+                }
+            }
+
+            LingShuLog.i(moduleTag, "[$tag] success | count=${models.size} | models=$models")
+            Result.success(models)
+        } catch (e: Exception) {
+            LingShuLog.e(moduleTag, "[$tag] exception | ${e.message}", e)
+            Result.error(
+                code = ErrorCodes.NETWORK_UNAVAILABLE,
+                message = e.message ?: "无法连接 Ollama 服务",
+                cause = e
+            )
+        }
+    }
+
     private fun parseOllamaChatResponse(responseBody: String): String {
         return try {
             val json = JSONObject(responseBody)

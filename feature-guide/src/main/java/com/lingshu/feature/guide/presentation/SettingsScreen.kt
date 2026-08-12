@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,6 +75,13 @@ fun SettingsScreen(
     LingShuLog.i(SETTINGS_TAG, "SettingsScreen: composing")
     val apiKey by viewModel.apiKey.collectAsState()
     val ttsEnabled by viewModel.ttsEnabled.collectAsState()
+    val llmProvider by viewModel.llmProvider.collectAsState()
+    val ollamaUrl by viewModel.ollamaUrl.collectAsState()
+    val ollamaModel by viewModel.ollamaModel.collectAsState()
+    val geminiApiKey by viewModel.geminiApiKey.collectAsState()
+    val ollamaModels by viewModel.ollamaModels.collectAsState()
+    val modelsLoading by viewModel.modelsLoading.collectAsState()
+    val modelsError by viewModel.modelsError.collectAsState()
 
     Scaffold(
         topBar = {
@@ -179,6 +187,177 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // LLM Provider 选择
+                    Text(
+                        text = "AI 引擎",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    val providers = listOf(
+                        "DEEPSEEK" to "DeepSeek（云端，需 API Key）",
+                        "OLLAMA" to "Ollama（本地，需 PC 运行 Ollama）",
+                        "GEMINI" to "Gemini（Google，需 API Key）"
+                    )
+                    providers.forEach { (value, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.setLlmProvider(value) }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            androidx.compose.material3.RadioButton(
+                                selected = llmProvider == value,
+                                onClick = { viewModel.setLlmProvider(value) }
+                            )
+                            Text(
+                                text = label,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+
+                    // Ollama 配置
+                    if (llmProvider == "OLLAMA") {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Ollama 服务地址",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        var ollamaUrlText by remember(ollamaUrl) { mutableStateOf(ollamaUrl) }
+                        OutlinedTextField(
+                            value = ollamaUrlText,
+                            onValueChange = {
+                                ollamaUrlText = it
+                                viewModel.setOllamaUrl(it)
+                            },
+                            placeholder = { Text("http://10.0.2.2:11434") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // 模型选择行：标题 + 刷新按钮
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "选择模型",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f)
+                            )
+                            androidx.compose.material3.TextButton(
+                                onClick = { viewModel.refreshOllamaModels() },
+                                enabled = !modelsLoading
+                            ) {
+                                androidx.compose.material3.Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Default.Refresh,
+                                    contentDescription = "刷新",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (modelsLoading) "加载中..." else "刷新列表",
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+
+                        // 错误提示
+                        if (modelsError != null) {
+                            Text(
+                                text = "获取失败：$modelsError",
+                                fontSize = 11.sp,
+                                color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
+                            )
+                        }
+
+                        // 可选模型列表（从 Ollama 服务拉取）
+                        if (ollamaModels.isNotEmpty()) {
+                            ollamaModels.forEach { modelName ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.setOllamaModel(modelName) }
+                                        .padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    androidx.compose.material3.RadioButton(
+                                        selected = ollamaModel == modelName,
+                                        onClick = { viewModel.setOllamaModel(modelName) }
+                                    )
+                                    Text(
+                                        text = modelName,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
+                            }
+                            androidx.compose.material3.HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+
+                        // 手动输入模型名（仍保留，用于自定义）
+                        Text(
+                            text = "或手动输入模型名",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        var ollamaModelText by remember(ollamaModel) { mutableStateOf(ollamaModel) }
+                        OutlinedTextField(
+                            value = ollamaModelText,
+                            onValueChange = {
+                                ollamaModelText = it
+                                viewModel.setOllamaModel(it)
+                            },
+                            placeholder = { Text("如 qwen2.5:7b") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+                        Text(
+                            text = "提示：模拟器用 10.0.2.2 访问宿主机 Ollama；真机用局域网 IP。点击「刷新列表」可获取 PC 上已安装的模型",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
+                    // Gemini 配置
+                    if (llmProvider == "GEMINI") {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Gemini API Key",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        var geminiKeyText by remember(geminiApiKey) { mutableStateOf(geminiApiKey) }
+                        OutlinedTextField(
+                            value = geminiKeyText,
+                            onValueChange = {
+                                geminiKeyText = it
+                                viewModel.setGeminiApiKey(it)
+                            },
+                            placeholder = { Text("输入 Gemini API Key") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
                     }
                 }
             }
@@ -381,7 +560,8 @@ private fun SettingsItem(
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val appPreferences: AppPreferences
+    private val appPreferences: AppPreferences,
+    private val ollamaProvider: com.lingshu.core.data.llm.OllamaProvider
 ) : ViewModel() {
 
     private val _apiKey = MutableStateFlow("")
@@ -390,11 +570,45 @@ class SettingsViewModel @Inject constructor(
     private val _ttsEnabled = MutableStateFlow(true)
     val ttsEnabled: StateFlow<Boolean> = _ttsEnabled.asStateFlow()
 
+    private val _llmProvider = MutableStateFlow("OLLAMA")
+    val llmProvider: StateFlow<String> = _llmProvider.asStateFlow()
+
+    private val _ollamaUrl = MutableStateFlow("http://10.0.2.2:11434")
+    val ollamaUrl: StateFlow<String> = _ollamaUrl.asStateFlow()
+
+    private val _ollamaModel = MutableStateFlow("qwen2.5:0.5b")
+    val ollamaModel: StateFlow<String> = _ollamaModel.asStateFlow()
+
+    private val _geminiApiKey = MutableStateFlow("")
+    val geminiApiKey: StateFlow<String> = _geminiApiKey.asStateFlow()
+
+    // Ollama 可用模型列表（从服务动态拉取）
+    private val _ollamaModels = MutableStateFlow<List<String>>(emptyList())
+    val ollamaModels: StateFlow<List<String>> = _ollamaModels.asStateFlow()
+
+    private val _modelsLoading = MutableStateFlow(false)
+    val modelsLoading: StateFlow<Boolean> = _modelsLoading.asStateFlow()
+
+    private val _modelsError = MutableStateFlow<String?>(null)
+    val modelsError: StateFlow<String?> = _modelsError.asStateFlow()
+
     init {
         viewModelScope.launch {
             appPreferences.apiKey.collect { key ->
                 _apiKey.value = key
             }
+        }
+        viewModelScope.launch {
+            appPreferences.llmProvider.collect { _llmProvider.value = it }
+        }
+        viewModelScope.launch {
+            appPreferences.ollamaUrl.collect { _ollamaUrl.value = it }
+        }
+        viewModelScope.launch {
+            appPreferences.ollamaModel.collect { _ollamaModel.value = it }
+        }
+        viewModelScope.launch {
+            appPreferences.geminiApiKey.collect { _geminiApiKey.value = it }
         }
     }
 
@@ -405,7 +619,57 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setLlmProvider(provider: String) {
+        _llmProvider.value = provider
+        viewModelScope.launch {
+            appPreferences.setLlmProvider(provider)
+        }
+    }
+
+    fun setOllamaUrl(url: String) {
+        _ollamaUrl.value = url
+        viewModelScope.launch {
+            appPreferences.setOllamaUrl(url)
+        }
+    }
+
+    fun setOllamaModel(model: String) {
+        _ollamaModel.value = model
+        viewModelScope.launch {
+            appPreferences.setOllamaModel(model)
+        }
+    }
+
+    fun setGeminiApiKey(key: String) {
+        _geminiApiKey.value = key
+        viewModelScope.launch {
+            appPreferences.setGeminiApiKey(key)
+        }
+    }
+
     fun toggleTts(enabled: Boolean) {
         _ttsEnabled.value = enabled
+    }
+
+    /**
+     * 从 Ollama 服务拉取已安装的模型列表，用于在 UI 中选择。
+     */
+    fun refreshOllamaModels() {
+        viewModelScope.launch {
+            _modelsLoading.value = true
+            _modelsError.value = null
+            val result = ollamaProvider.listInstalledModels(_ollamaUrl.value)
+            when (result) {
+                is com.lingshu.core.common.error.Result.Success -> {
+                    _ollamaModels.value = result.data
+                    LingShuLog.i("SettingsVM", "刷新模型列表成功: ${result.data}")
+                }
+                is com.lingshu.core.common.error.Result.Error -> {
+                    _modelsError.value = result.message
+                    LingShuLog.w("SettingsVM", "刷新模型列表失败: ${result.message}")
+                }
+            }
+            _modelsLoading.value = false
+        }
     }
 }

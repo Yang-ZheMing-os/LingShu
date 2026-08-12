@@ -38,6 +38,10 @@ dependencies {
     implementation(project(":core-ui"))
     implementation(project(":feature-chat"))
 
+    // Vosk 离线语音识别
+    implementation("com.alphacephei:vosk-android:0.3.47")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")

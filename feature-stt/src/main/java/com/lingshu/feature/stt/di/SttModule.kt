@@ -1,6 +1,6 @@
 package com.lingshu.feature.stt.di
 
-import com.lingshu.feature.stt.data.SttEngineImpl
+import com.lingshu.feature.stt.data.CompositeSttEngine
 import com.lingshu.core.common.event.ISttEngine
 import dagger.Binds
 import dagger.Module
@@ -15,6 +15,6 @@ abstract class SttModule {
     @Binds
     @Singleton
     abstract fun bindSttEngine(
-        sttEngineImpl: SttEngineImpl
+        compositeSttEngine: CompositeSttEngine
     ): ISttEngine
 }

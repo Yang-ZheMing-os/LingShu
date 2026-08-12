@@ -286,17 +286,52 @@ class ChatRepository @Inject constructor(
     }
 
     private suspend fun buildLlmConfig(): LlmConfig {
-        val apiKey = appPreferences.apiKey.first()
-        val providerType = ModelProviderType.DEEPSEEK
-        return LlmConfig(
-            provider = providerType,
-            apiKey = apiKey,
-            baseUrl = "https://api.deepseek.com/v1",
-            modelName = "deepseek-chat",
-            temperature = 0.7f,
-            maxTokens = 2048,
-            timeoutSeconds = 30
-        )
+        val providerName = appPreferences.llmProvider.first()
+        val providerType = runCatching { ModelProviderType.valueOf(providerName) }
+            .getOrDefault(ModelProviderType.DEEPSEEK)
+
+        return when (providerType) {
+            ModelProviderType.OLLAMA -> {
+                val ollamaUrl = appPreferences.ollamaUrl.first()
+                val ollamaModel = appPreferences.ollamaModel.first()
+                LingShuLog.i(TAG, "使用 Ollama: url=$ollamaUrl, model=$ollamaModel")
+                LlmConfig(
+                    provider = ModelProviderType.OLLAMA,
+                    apiKey = "",
+                    baseUrl = ollamaUrl,
+                    modelName = ollamaModel,
+                    temperature = 0.7f,
+                    maxTokens = 2048,
+                    timeoutSeconds = 60
+                )
+            }
+            ModelProviderType.GEMINI -> {
+                val geminiKey = appPreferences.geminiApiKey.first()
+                LingShuLog.i(TAG, "使用 Gemini")
+                LlmConfig(
+                    provider = ModelProviderType.GEMINI,
+                    apiKey = geminiKey,
+                    baseUrl = "https://generativelanguage.googleapis.com",
+                    modelName = "gemini-1.5-flash",
+                    temperature = 0.7f,
+                    maxTokens = 2048,
+                    timeoutSeconds = 30
+                )
+            }
+            else -> {
+                val apiKey = appPreferences.apiKey.first()
+                LingShuLog.i(TAG, "使用 DeepSeek")
+                LlmConfig(
+                    provider = ModelProviderType.DEEPSEEK,
+                    apiKey = apiKey,
+                    baseUrl = "https://api.deepseek.com/v1",
+                    modelName = "deepseek-chat",
+                    temperature = 0.7f,
+                    maxTokens = 2048,
+                    timeoutSeconds = 30
+                )
+            }
+        }
     }
 
     private fun generateTraceId(): String {
