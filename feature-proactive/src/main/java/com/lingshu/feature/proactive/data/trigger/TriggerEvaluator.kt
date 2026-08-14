@@ -12,6 +12,10 @@ import java.util.Calendar
 
 class TriggerEvaluator(private val context: Context) {
 
+    companion object {
+        private const val TAG = "ProactiveEval"
+    }
+
     private val sensorManager: SensorManager? by lazy {
         context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
     }
@@ -53,35 +57,62 @@ class TriggerEvaluator(private val context: Context) {
 
     fun evaluate(triggers: Map<TriggerType, Boolean>): TriggerType? {
         val now = Calendar.getInstance()
+        val h = now.get(Calendar.HOUR_OF_DAY)
+        val m = now.get(Calendar.MINUTE)
 
         for (triggerType in TriggerType.values()) {
-            if (triggers[triggerType] != true) continue
-            
+            val enabled = triggers[triggerType] == true
+            if (!enabled) {
+                LingShuLog.v(TAG, "跳过触发器 $triggerType：用户已关闭")
+                continue
+            }
+
             val triggered = when (triggerType) {
                 TriggerType.LATE_NIGHT -> checkLateNight(now)
-                TriggerType.MEAL_TIME -> checkMealTime(now)
-                TriggerType.SEDENTARY -> checkSedentary()
-                TriggerType.DARK_WALKING -> checkDarkWalking()
-                TriggerType.HEART_RATE -> checkHeartRate()
-                TriggerType.STRESS -> checkStress()
-                TriggerType.RAINY_DAY -> checkRainyDay()
-                TriggerType.MEMORY -> checkMemoryTrigger()
-                TriggerType.RANDOM -> checkRandomTrigger()
+                TriggerType.MEAL_TIME -> {
+                    val hit = checkMealTime(now)
+                    LingShuLog.d(TAG, "MEAL_TIME 检查：当前$h:$m ∈ [早07-09/午11:30-13:30/晚17:30-19:30]? $hit")
+                    hit
+                }
+                TriggerType.SEDENTARY -> {
+                    val hit = checkSedentary()
+                    val durSec = if (sedentaryStartTime == 0L) 0 else (System.currentTimeMillis() - sedentaryStartTime) / 1000
+                    LingShuLog.d(TAG, "SEDENTARY 检查：坐了 ${durSec / 60}分${durSec % 60}秒 (需≥2h)? $hit")
+                    hit
+                }
+                TriggerType.DARK_WALKING -> {
+                    val hit = checkDarkWalking()
+                    LingShuLog.d(TAG, "DARK_WALKING 检查：lux=${"%.1f".format(currentLightLux)} isWalking=$isWalking? $hit")
+                    hit
+                }
+                TriggerType.HEART_RATE -> {
+                    val hit = checkHeartRate()
+                    LingShuLog.d(TAG, "HEART_RATE 检查：bpm=$currentHeartRate (异常>100 或 <45)? $hit")
+                    hit
+                }
+                TriggerType.STRESS -> {
+                    val hit = checkStress()
+                    LingShuLog.d(TAG, "STRESS 检查：hrv=$currentHrv (>0.7=压力大)? $hit")
+                    hit
+                }
+                TriggerType.RAINY_DAY -> false.also { LingShuLog.d(TAG, "RAINY_DAY: 未接入天气API，恒false") }
+                TriggerType.MEMORY -> false.also { LingShuLog.d(TAG, "MEMORY: 由外部模块处理，恒false") }
+                TriggerType.RANDOM -> checkRandomTrigger().also { LingShuLog.d(TAG, "RANDOM: 5%采样命中? $it") }
             }
 
             if (triggered) {
-                // Random probability filter for non-urgent triggers (20-30% filter rate)
                 val nonUrgentTypes = setOf(TriggerType.SEDENTARY, TriggerType.DARK_WALKING, TriggerType.RAINY_DAY, TriggerType.RANDOM)
                 if (triggerType in nonUrgentTypes) {
                     if (kotlin.random.Random.nextFloat() > 0.25f) {
-                        LingShuLog.d("Proactive", "Triggered but filtered by probability: $triggerType")
+                        LingShuLog.i(TAG, "✅$triggerType 命中，但非紧急触发被 75% 概率过滤掉，继续下一个")
                         continue
                     }
                 }
-                LingShuLog.d("Proactive", "Triggered: $triggerType")
+                LingShuLog.i(TAG, "🎯 命中触发器: $triggerType（优先级最高，已返回）")
                 return triggerType
             }
         }
+        LingShuLog.i(TAG, "全部 ${TriggerType.values().size} 个 trigger 遍历完毕，未命中任何一个")
         return null
     }
 
@@ -112,7 +143,17 @@ class TriggerEvaluator(private val context: Context) {
             timeInMinutes in lateNightStart..lateNightEnd
         }
 
-        return isLateNight && isScreenOn()
+        val screenOn = isScreenOn()
+        if (isLateNight) {
+            LingShuLog.i(
+                TAG,
+                "LATE_NIGHT 时间窗口命中（${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')} ∈ 23:30~05:00）, " +
+                    "screenOn=$screenOn → 不再强绑屏幕亮灭，直接返回 true（修复之前 100% 被过滤的 Bug）"
+            )
+        }
+        // ⚠️ 关键修复：之前必须 && isScreenOn()，导致 WorkManager 后台跑时屏幕必熄 → LATE_NIGHT 永远 false
+        // 睡前关怀的目的是「到点就推」，不管用户现在亮不亮屏；他点亮屏幕看通知栏时就能看到。
+        return isLateNight
     }
 
     private fun checkMealTime(now: Calendar): Boolean {

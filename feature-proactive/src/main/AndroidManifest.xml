@@ -9,6 +9,7 @@
 
     <application>
 
+        <!-- 通知按钮点击回调 -->
         <receiver
             android:name=".data.NotificationActionReceiver"
             android:enabled="true"
@@ -21,6 +22,20 @@
                 <action android:name="com.lingshu.proactive.ACTION_HEART_RATE" />
                 <action android:name="com.lingshu.proactive.ACTION_STRESS" />
                 <action android:name="com.lingshu.proactive.ACTION_RAINY_DAY" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 开机自启 / 应用更新自启：恢复主动关怀 Worker -->
+        <receiver
+            android:name=".receiver.ProactiveBootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 
