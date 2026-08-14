@@ -18,6 +18,8 @@ dependencyResolutionManagement {
         maven(url = "https://maven.aliyun.com/repository/central")
         google()
         mavenCentral()
+        maven(url = "https://jitpack.io")
+        maven(url = "https://xdcobra.github.io/maven/")
     }
 }
 

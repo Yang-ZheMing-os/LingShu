@@ -28,7 +28,7 @@ class TtsEngineImpl @Inject constructor(
     private var tts: TextToSpeech? = null
     private var systemTtsReady = false
     private var mediaPlayer: MediaPlayer? = null
-    private var edgeTtsLoaded = false
+    private var offlineTtsLoaded = false
 
     init {
         tts = TextToSpeech(context, this)
@@ -50,19 +50,19 @@ class TtsEngineImpl @Inject constructor(
         }
     }
 
-    private suspend fun ensureEdgeTtsLoaded(): Boolean {
-        if (edgeTtsLoaded) return true
+    private suspend fun ensureOfflineTtsLoaded(): Boolean {
+        if (offlineTtsLoaded) return true
         val config = OfflineTtsConfig(
-            provider = OfflineTtsProvider.EDGE_TTS_REMOTE_FALLBACK,
+            provider = OfflineTtsProvider.ANDROID_TTS,
             modelDir = "",
-            voiceId = "default_female",
+            voiceId = "default",
             speed = 1.0f,
             sampleRate = 24000,
             format = "wav"
         )
         return when (val r = offlineTtsRouter.load(config, "tts_init")) {
             is Result.Success -> {
-                edgeTtsLoaded = true
+                offlineTtsLoaded = true
                 LingShuLog.i(moduleTag, "EdgeTTS 加载成功（fallback 就绪）")
                 true
             }
@@ -103,7 +103,7 @@ class TtsEngineImpl @Inject constructor(
     }
 
     private suspend fun speakWithEdgeTts(text: String): Result<Unit> {
-        if (!ensureEdgeTtsLoaded()) {
+        if (!ensureOfflineTtsLoaded()) {
             return Result.Error(
                 code = ErrorCodes.TTS_UNAVAILABLE,
                 message = "TTS 引擎不可用（系统 TTS 和 EdgeTTS 均失败）"

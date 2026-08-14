@@ -9,5 +9,14 @@ interface IChatRepository {
 
     suspend fun sendMessage(content: String): Result<Message>
 
+    /**
+     * 流式发送消息：逐 token 回调，最后返回完整 AI 消息。
+     * onToken 在主线程回调，可直接用于 UI 逐字刷新。
+     */
+    suspend fun sendMessageStream(
+        content: String,
+        onToken: (String) -> Unit
+    ): Result<Message>
+
     suspend fun clearMessages()
 }

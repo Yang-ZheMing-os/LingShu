@@ -1,6 +1,10 @@
 package com.lingshu.app
 
 import android.os.Bundle
+import android.os.Build
+import android.provider.Settings
+import com.lingshu.core.common.event.IFloatingService
+import javax.inject.Inject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -10,6 +14,9 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var floatingService: IFloatingService
 
     private val permissionResultCallback = mutableMapOf<String, (Boolean) -> Unit>()
 
@@ -28,6 +35,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        // 启动悬浮窗（需有 SYSTEM_ALERT_WINDOW 权限）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
+            floatingService.show()
+        }
 
         setContent {
             LingShuTheme {

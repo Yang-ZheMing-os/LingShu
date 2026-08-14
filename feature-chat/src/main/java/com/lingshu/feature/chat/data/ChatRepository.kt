@@ -31,6 +31,7 @@ class ChatRepository @Inject constructor(
     private val promptAssembler: IPromptAssembler,
     private val promptInjector: PromptInjector,
     private val llmRouter: LlmRouter,
+    private val llmConfigStore: com.lingshu.core.data.llm.LlmConfigStore,
     @Suppress("unused") private val ragService: IRagService,
     private val memoryServiceLazy: Provider<IMemoryService>,
     private val personaServiceLazy: Provider<IPersonaService>
@@ -140,7 +141,119 @@ class ChatRepository @Inject constructor(
         }
     }
 
+    override suspend fun sendMessageStream(
+        content: String,
+        onToken: (String) -> Unit
+    ): Result<Message> {
+        val traceId = generateTraceId()
+        val tracePrefix = "[$traceId] "
+
+        LingShuLog.i(TAG, "${tracePrefix}sendMessageStream start, contentLength=${content.length}")
+
+        return try {
+            val userMessage = MessageEntity(
+                content = content,
+                isUser = true
+            )
+            messageDao.insertMessage(userMessage)
+
+            val history = getMessages().first()
+
+            val assemblyStartTime = System.currentTimeMillis()
+            val promptAssembly = promptAssembler.assemble(
+                userInput = content,
+                history = history,
+                traceId = traceId
+            )
+            val assemblyCost = System.currentTimeMillis() - assemblyStartTime
+
+            LingShuLog.i(
+                TAG,
+                "${tracePrefix}PromptAssembly完成(stream), cost=${assemblyCost}ms, " +
+                        "systemPromptBytes=${promptAssembly.systemPrompt.toByteArray().size}, " +
+                        "meta=${promptAssembly.injectionMeta}"
+            )
+
+            val llmMessages = promptInjector.inject(promptAssembly, traceId)
+            val coreLlmMessages = llmMessages.map {
+                com.lingshu.core.data.llm.ChatMessage(
+                    role = it.role,
+                    content = it.content
+                )
+            }
+
+            val llmConfig = buildLlmConfig()
+
+            // 外层累加 token，防止流式中断时丢失已输出内容
+            val accumulated = StringBuilder()
+
+            val llmCallStart = System.currentTimeMillis()
+            val llmResult = try {
+                llmRouter.chatStream(
+                    messages = coreLlmMessages,
+                    primaryConfig = llmConfig,
+                    onToken = { token ->
+                        accumulated.append(token)
+                        onToken(token)
+                    },
+                    fallbackConfigs = llmConfigStore.getAllConfigs(),
+                    traceId = traceId
+                )
+            } catch (e: Exception) {
+                LingShuLog.e(TAG, "${tracePrefix}LLM流式调用异常，触发fallback", e)
+                null
+            }
+            val llmCallCostMs = System.currentTimeMillis() - llmCallStart
+
+            val (aiReply, isFallback) = when (llmResult) {
+                is Result.Success -> {
+                    Pair(llmResult.data, false)
+                }
+                is Result.Error, null -> {
+                    if (accumulated.isNotEmpty()) {
+                        LingShuLog.w(
+                            TAG,
+                            "${tracePrefix}流式中断，保留已输出 ${accumulated.length} 字符"
+                        )
+                        Pair(accumulated.toString(), false)
+                    } else {
+                        LingShuLog.w(TAG, "${tracePrefix}LLM不可用或失败，使用fallback回复")
+                        Pair(FALLBACK_REPLY, true)
+                    }
+                }
+            }
+
+            val aiMessage = MessageEntity(
+                content = aiReply,
+                isUser = false
+            )
+            messageDao.insertMessage(aiMessage)
+            cleanupOldMessages()
+
+            postProcessDialogue(
+                traceId = traceId,
+                userInput = content,
+                aiResponse = aiReply,
+                promptAssembly = promptAssembly,
+                llmCallCostMs = llmCallCostMs,
+                replyChars = aiReply.length,
+                isFallback = isFallback
+            )
+
+            Result.Success(aiMessage.toDomain())
+
+        } catch (e: Exception) {
+            LingShuLog.e(TAG, "${tracePrefix}流式发送消息失败", e)
+            Result.Error(
+                code = mapErrorToCode(e),
+                message = e.message ?: "Unknown error",
+                cause = e
+            )
+        }
+    }
+
     override suspend fun clearMessages() {
+
         messageDao.deleteAllMessages()
     }
 

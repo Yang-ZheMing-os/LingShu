@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import com.lingshu.core.common.log.LingShuLog
+import com.lingshu.core.common.event.di.EventBridgesStarter
+import javax.inject.Inject
 import dagger.hilt.android.HiltAndroidApp
 import java.io.File
 import java.io.FileWriter
@@ -15,11 +17,17 @@ import java.util.Locale
 @HiltAndroidApp
 class LingShuApplication : Application() {
 
+    @Inject
+    lateinit var eventBridgesStarter: EventBridgesStarter
+
     override fun onCreate() {
         super.onCreate()
         instance = this
         initLog()
         setupUncaughtExceptionHandler()
+
+        // 启动事件桥梁，打通语音闭环：唤醒->STT->对话->TTS播报
+        eventBridgesStarter.startAll()
         LingShuLog.i(TAG, "Application started")
     }
 

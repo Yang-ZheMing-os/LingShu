@@ -10,4 +10,6 @@ interface IPersonaService {
     suspend fun resetToDefault()
     suspend fun generateSystemPrompt(): String
     suspend fun evolvePersona(userInput: String, aiResponse: String)
+    suspend fun exportPersona(): String
+    suspend fun importPersona(json: String): Boolean
 }

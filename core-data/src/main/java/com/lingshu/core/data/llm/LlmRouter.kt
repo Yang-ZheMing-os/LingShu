@@ -15,6 +15,7 @@ class LlmRouter @Inject constructor(
     private val ollamaProvider: OllamaProvider,
     private val geminiProvider: GeminiProvider,
     private val openAiProvider: OpenAiProvider,
+    private val apiKeyRotator: ApiKeyRotator,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) {
 
@@ -101,6 +102,17 @@ class LlmRouter @Inject constructor(
         return chain
     }
 
+    /**
+     * 判断错误是否与 API Key 相关（需要轮询到下一个 Key）。
+     * - API_KEY_INVALID：401 鉴权失败
+     * - 429 限流：错误消息中包含 "429"
+     */
+    private fun isKeyRelatedError(error: Result.Error): Boolean {
+        if (error.code == ErrorCodes.API_KEY_INVALID) return true
+        if (error.message.contains("429", ignoreCase = true)) return true
+        return false
+    }
+
     suspend fun chat(
         messages: List<ChatMessage>,
         primaryConfig: LlmConfig,
@@ -130,35 +142,64 @@ class LlmRouter @Inject constructor(
         var attemptIndex = 0
 
         for ((provider, config) in chain) {
-            attemptIndex++
-            val isPrimary = attemptIndex == 1
-
-            if (!isPrimary) {
-                LingShuLog.w(moduleTag, "[$traceId] chat FALLBACK | attempt=$attemptIndex/${chain.size} | " +
-                        "switching ${lastError?.let { "from ${chain[attemptIndex - 2].first.type}" } ?: ""} " +
-                        "-> to ${provider.type} (model=${config.modelName}) | " +
-                        "lastError=${lastError?.code}:${lastError?.message?.take(80)}")
+            val keys = config.allKeys()
+            // 无 Key 的 provider（如 Ollama）直接调用
+            if (keys.isEmpty()) {
+                attemptIndex++
+                val isPrimary = attemptIndex == 1
+                if (!isPrimary) {
+                    LingShuLog.w(moduleTag, "[$traceId] chat FALLBACK | attempt=$attemptIndex | " +
+                            "switch -> ${provider.type} (model=${config.modelName})")
+                }
+                val callTraceId = if (traceId.isEmpty()) traceId else "${traceId}-a$attemptIndex"
+                when (val result = provider.chat(messages, config, callTraceId)) {
+                    is Result.Success -> {
+                        val elapsed = System.currentTimeMillis() - startTime
+                        LingShuLog.i(moduleTag, "[$traceId] chat ROUTE success | attempts=$attemptIndex | " +
+                                "finalProvider=${provider.type} | elapsedMs=$elapsed")
+                        return@withContext result
+                    }
+                    is Result.Error -> {
+                        lastError = result
+                        LingShuLog.w(moduleTag, "[$traceId] chat provider ${provider.type} failed | " +
+                                "code=${result.code} | msg=${result.message.take(120)}")
+                    }
+                }
+                continue
             }
 
-            LingShuLog.i(moduleTag, "[$traceId] chat DISPATCH attempt=$attemptIndex | " +
-                    "provider=${provider.type} | model=${config.modelName} | baseUrl=${config.baseUrl}")
-
-            val callTraceId = if (traceId.isEmpty()) traceId else "${traceId}-a$attemptIndex"
-
-            when (val result = provider.chat(messages, config, callTraceId)) {
-                is Result.Success -> {
-                    val elapsed = System.currentTimeMillis() - startTime
-                    val switched = !isPrimary
-                    LingShuLog.i(moduleTag, "[$traceId] chat ROUTE success | attempts=$attemptIndex | " +
-                            "finalProvider=${provider.type} | switched=$switched | elapsedMs=$elapsed")
-                    return@withContext result
+            // 有 Key 的 provider：轮询所有 Key
+            for (key in keys) {
+                attemptIndex++
+                val isPrimary = attemptIndex == 1
+                if (!isPrimary) {
+                    LingShuLog.w(moduleTag, "[$traceId] chat FALLBACK | attempt=$attemptIndex | " +
+                            "switch -> ${provider.type} key=...${key.takeLast(8)}")
                 }
-                is Result.Error -> {
-                    lastError = result
-                    LingShuLog.w(moduleTag, "[$traceId] chat provider ${provider.type} failed | " +
-                            "attempt=$attemptIndex | code=${result.code} | msg=${result.message.take(120)}")
-                    if (isLastAttempt(attemptIndex, chain.size)) {
-                        break
+                val keyConfig = apiKeyRotator.withKey(config, key)
+                val callTraceId = if (traceId.isEmpty()) traceId else "${traceId}-a$attemptIndex"
+
+                LingShuLog.i(moduleTag, "[$traceId] chat DISPATCH attempt=$attemptIndex | " +
+                        "provider=${provider.type} | model=${config.modelName} | key=...${key.takeLast(8)}")
+
+                when (val result = provider.chat(messages, keyConfig, callTraceId)) {
+                    is Result.Success -> {
+                        apiKeyRotator.markSuccess(provider.type, key)
+                        val elapsed = System.currentTimeMillis() - startTime
+                        LingShuLog.i(moduleTag, "[$traceId] chat ROUTE success | attempts=$attemptIndex | " +
+                                "finalProvider=${provider.type} | elapsedMs=$elapsed")
+                        return@withContext result
+                    }
+                    is Result.Error -> {
+                        lastError = result
+                        if (isKeyRelatedError(result)) {
+                            apiKeyRotator.markFailed(provider.type, key)
+                            LingShuLog.w(moduleTag, "[$traceId] chat key ...${key.takeLast(8)} failed (key-related) | " +
+                                    "code=${result.code} | will try next key/provider")
+                        } else {
+                            LingShuLog.w(moduleTag, "[$traceId] chat key ...${key.takeLast(8)} failed (non-key) | " +
+                                    "code=${result.code} | skip to next provider")
+                        }
                     }
                 }
             }
@@ -204,42 +245,71 @@ class LlmRouter @Inject constructor(
         var streamStarted = false
 
         for ((provider, config) in chain) {
-            attemptIndex++
-            val isPrimary = attemptIndex == 1
-
-            if (!isPrimary && !streamStarted) {
-                LingShuLog.w(moduleTag, "[$traceId] chatStream FALLBACK | attempt=$attemptIndex/${chain.size} | " +
-                        "switch -> ${provider.type} (model=${config.modelName})")
-            }
-
-            LingShuLog.i(moduleTag, "[$traceId] chatStream DISPATCH attempt=$attemptIndex | " +
-                    "provider=${provider.type} | model=${config.modelName}")
-
-            val callTraceId = if (traceId.isEmpty()) traceId else "${traceId}-a$attemptIndex"
-            val wrappedOnToken: (String) -> Unit = { token ->
-                streamStarted = true
-                onToken(token)
-            }
-
-            when (val result = provider.chatStream(messages, config, wrappedOnToken, callTraceId)) {
-                is Result.Success -> {
-                    val elapsed = System.currentTimeMillis() - startTime
-                    val switched = !isPrimary
-                    LingShuLog.i(moduleTag, "[$traceId] chatStream ROUTE success | attempts=$attemptIndex | " +
-                            "finalProvider=${provider.type} | switched=$switched | elapsedMs=$elapsed")
-                    return@withContext result
+            val keys = config.allKeys()
+            if (keys.isEmpty()) {
+                attemptIndex++
+                val isPrimary = attemptIndex == 1
+                if (!isPrimary && !streamStarted) {
+                    LingShuLog.w(moduleTag, "[$traceId] chatStream FALLBACK | attempt=$attemptIndex | " +
+                            "switch -> ${provider.type}")
                 }
-                is Result.Error -> {
-                    lastError = result
-                    LingShuLog.w(moduleTag, "[$traceId] chatStream provider ${provider.type} failed | " +
-                            "attempt=$attemptIndex | code=${result.code} | streamStarted=$streamStarted")
-                    if (streamStarted) {
-                        LingShuLog.w(moduleTag, "[$traceId] stream already started, cannot fallback further")
-                        break
+                val callTraceId = if (traceId.isEmpty()) traceId else "${traceId}-a$attemptIndex"
+                val wrappedOnToken: (String) -> Unit = { token ->
+                    streamStarted = true
+                    onToken(token)
+                }
+                when (val result = provider.chatStream(messages, config, wrappedOnToken, callTraceId)) {
+                    is Result.Success -> {
+                        val elapsed = System.currentTimeMillis() - startTime
+                        LingShuLog.i(moduleTag, "[$traceId] chatStream ROUTE success | attempts=$attemptIndex | " +
+                                "finalProvider=${provider.type} | elapsedMs=$elapsed")
+                        return@withContext result
                     }
-                    if (isLastAttempt(attemptIndex, chain.size)) break
+                    is Result.Error -> {
+                        lastError = result
+                        if (streamStarted) break
+                    }
+                }
+                continue
+            }
+
+            // 有 Key 的 provider：轮询所有 Key（仅在流未开始时）
+            for (key in keys) {
+                if (streamStarted) break
+                attemptIndex++
+                val isPrimary = attemptIndex == 1
+                if (!isPrimary) {
+                    LingShuLog.w(moduleTag, "[$traceId] chatStream FALLBACK | attempt=$attemptIndex | " +
+                            "switch -> ${provider.type} key=...${key.takeLast(8)}")
+                }
+                val keyConfig = apiKeyRotator.withKey(config, key)
+                val callTraceId = if (traceId.isEmpty()) traceId else "${traceId}-a$attemptIndex"
+                val wrappedOnToken: (String) -> Unit = { token ->
+                    streamStarted = true
+                    onToken(token)
+                }
+
+                when (val result = provider.chatStream(messages, keyConfig, wrappedOnToken, callTraceId)) {
+                    is Result.Success -> {
+                        apiKeyRotator.markSuccess(provider.type, key)
+                        val elapsed = System.currentTimeMillis() - startTime
+                        LingShuLog.i(moduleTag, "[$traceId] chatStream ROUTE success | attempts=$attemptIndex | " +
+                                "finalProvider=${provider.type} | elapsedMs=$elapsed")
+                        return@withContext result
+                    }
+                    is Result.Error -> {
+                        lastError = result
+                        if (streamStarted) {
+                            LingShuLog.w(moduleTag, "[$traceId] stream already started, cannot fallback further")
+                            break
+                        }
+                        if (isKeyRelatedError(result)) {
+                            apiKeyRotator.markFailed(provider.type, key)
+                        }
+                    }
                 }
             }
+            if (streamStarted) break
         }
 
         val elapsed = System.currentTimeMillis() - startTime

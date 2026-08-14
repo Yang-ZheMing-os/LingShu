@@ -18,6 +18,10 @@ class HealthViewModel @Inject constructor(
     private val healthService: IHealthService
 ) : ViewModel() {
 
+    // 设备是否具备可检测的健康传感器（无传感器时 UI 显示“未连接可检测设备”）
+    private val _isDeviceSupported = MutableStateFlow(false)
+    val isDeviceSupported: StateFlow<Boolean> = _isDeviceSupported.asStateFlow()
+
     private val _heartRate = MutableStateFlow<UiState<Int>>(UiState.Idle)
     val heartRate: StateFlow<UiState<Int>> = _heartRate.asStateFlow()
 
@@ -40,20 +44,30 @@ class HealthViewModel @Inject constructor(
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     init {
-        checkPermissions()
+        refreshDeviceAndPermissionState()
     }
 
-    private fun checkPermissions() {
+    /** 重新检测设备可用性与真实权限状态 */
+    fun refreshDeviceAndPermissionState() {
+        _isDeviceSupported.value = healthService.isDeviceSupported()
         _hasPermissions.value = healthService.checkPermissions()
+    }
+
+    /**
+     * 界面 ON_RESUME 时调用：
+     * 重新读取真实授权状态，并在已授权但未加载时自动拉取真实数据。
+     */
+    fun onResumeCheck() {
+        refreshDeviceAndPermissionState()
+        if (_hasPermissions.value && _steps.value is UiState.Idle) {
+            loadAllData()
+        }
     }
 
     fun requestPermissions() {
         viewModelScope.launch {
-            val result = healthService.requestPermissions()
-            if (result.isSuccess) {
-                _hasPermissions.value = true
-                loadAllData()
-            }
+            // 跳转系统设置，由界面 ON_RESUME 重新检测真实授权状态并加载数据
+            healthService.requestPermissions()
         }
     }
 

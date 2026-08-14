@@ -15,11 +15,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.BackHand
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.VolumeUp
@@ -51,11 +56,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.core.data.datastore.AppPreferences
+import com.lingshu.core.data.llm.LlmConfig
+import com.lingshu.core.data.llm.LlmConfigStore
+import com.lingshu.core.data.llm.ModelProviderType
 import com.lingshu.core.ui.component.GlassCard
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -70,15 +82,17 @@ fun SettingsScreen(
     onNavigateToMod: () -> Unit = {},
     onNavigateToWakeWord: () -> Unit = {},
     onNavigateToCommunity: () -> Unit = {},
+    onNavigateToHealth: () -> Unit = {},
+    onNavigateToMemory: () -> Unit = {},
+    onNavigateToPersona: () -> Unit = {},
+    onNavigateToProactive: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     LingShuLog.i(SETTINGS_TAG, "SettingsScreen: composing")
     val apiKey by viewModel.apiKey.collectAsState()
     val ttsEnabled by viewModel.ttsEnabled.collectAsState()
     val llmProvider by viewModel.llmProvider.collectAsState()
-    val ollamaUrl by viewModel.ollamaUrl.collectAsState()
-    val ollamaModel by viewModel.ollamaModel.collectAsState()
-    val geminiApiKey by viewModel.geminiApiKey.collectAsState()
+    val currentConfig by viewModel.currentConfig.collectAsState()
     val ollamaModels by viewModel.ollamaModels.collectAsState()
     val modelsLoading by viewModel.modelsLoading.collectAsState()
     val modelsError by viewModel.modelsError.collectAsState()
@@ -200,10 +214,13 @@ fun SettingsScreen(
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
 
+                    // 5 个 Provider 选项
                     val providers = listOf(
                         "DEEPSEEK" to "DeepSeek（云端，需 API Key）",
-                        "OLLAMA" to "Ollama（本地，需 PC 运行 Ollama）",
-                        "GEMINI" to "Gemini（Google，需 API Key）"
+                        "OPENAI" to "OpenAI 兼容（含通义千问/智谱/Kimi，改 baseUrl）",
+                        "GEMINI" to "Gemini（Google，需 API Key）",
+                        "QWEN" to "通义千问（阿里云，需 API Key）",
+                        "OLLAMA" to "Ollama（本地，需 PC 运行 Ollama）"
                     )
                     providers.forEach { (value, label) ->
                         Row(
@@ -214,7 +231,7 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             androidx.compose.material3.RadioButton(
-                                selected = llmProvider == value,
+                                selected = llmProvider.name == value,
                                 onClick = { viewModel.setLlmProvider(value) }
                             )
                             Text(
@@ -225,27 +242,103 @@ fun SettingsScreen(
                         }
                     }
 
-                    // Ollama 配置
-                    if (llmProvider == "OLLAMA") {
+                    // API Key 输入框：所有云端 Provider 都显示，Ollama 不需要故隐藏
+                    if (llmProvider != ModelProviderType.OLLAMA) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Ollama 服务地址",
+                            text = "API Key",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        var ollamaUrlText by remember(ollamaUrl) { mutableStateOf(ollamaUrl) }
+                        var apiKeyText by remember(currentConfig.apiKey) {
+                            mutableStateOf(currentConfig.apiKey)
+                        }
                         OutlinedTextField(
-                            value = ollamaUrlText,
+                            value = apiKeyText,
                             onValueChange = {
-                                ollamaUrlText = it
-                                viewModel.setOllamaUrl(it)
+                                apiKeyText = it
+                                viewModel.saveApiKey(it)
                             },
-                            placeholder = { Text("http://10.0.2.2:11434") },
+                            placeholder = {
+                                Text("输入当前 Provider 的 API Key")
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onBackground
+                            ),
                             singleLine = true
                         )
+                    }
 
+                    // Base URL 输入框：允许用户编辑（用于切换智谱/Kimi 等 OpenAI 兼容服务）
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (llmProvider == ModelProviderType.OLLAMA) "Ollama 服务地址" else "Base URL",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    var baseUrlText by remember(currentConfig.baseUrl) {
+                        mutableStateOf(currentConfig.baseUrl)
+                    }
+                    OutlinedTextField(
+                        value = baseUrlText,
+                        onValueChange = {
+                            baseUrlText = it
+                            viewModel.saveBaseUrl(it)
+                        },
+                        placeholder = {
+                            Text(
+                                if (llmProvider == ModelProviderType.OLLAMA) "http://10.0.2.2:11434"
+                                else "https://api.example.com/v1"
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground
+                        ),
+                        singleLine = true
+                    )
+
+                    // 模型名输入框：允许用户指定模型名
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "模型名",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    var modelNameText by remember(currentConfig.modelName) {
+                        mutableStateOf(currentConfig.modelName)
+                    }
+                    OutlinedTextField(
+                        value = modelNameText,
+                        onValueChange = {
+                            modelNameText = it
+                            viewModel.saveModelName(it)
+                        },
+                        placeholder = {
+                            Text("如 deepseek-chat / qwen-plus / gemini-1.5-flash")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground
+                        ),
+                        singleLine = true
+                    )
+
+                    // Ollama 模型列表刷新（仅 Ollama 显示）
+                    if (llmProvider == ModelProviderType.OLLAMA) {
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // 模型选择行：标题 + 刷新按钮
@@ -264,7 +357,7 @@ fun SettingsScreen(
                                 enabled = !modelsLoading
                             ) {
                                 androidx.compose.material3.Icon(
-                                    imageVector = androidx.compose.material.icons.Icons.Default.Refresh,
+                                    imageVector = Icons.Default.Refresh,
                                     contentDescription = "刷新",
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -292,13 +385,13 @@ fun SettingsScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { viewModel.setOllamaModel(modelName) }
+                                        .clickable { viewModel.saveModelName(modelName) }
                                         .padding(vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     androidx.compose.material3.RadioButton(
-                                        selected = ollamaModel == modelName,
-                                        onClick = { viewModel.setOllamaModel(modelName) }
+                                        selected = currentConfig.modelName == modelName,
+                                        onClick = { viewModel.saveModelName(modelName) }
                                     )
                                     Text(
                                         text = modelName,
@@ -312,51 +405,12 @@ fun SettingsScreen(
                             )
                         }
 
-                        // 手动输入模型名（仍保留，用于自定义）
-                        Text(
-                            text = "或手动输入模型名",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        var ollamaModelText by remember(ollamaModel) { mutableStateOf(ollamaModel) }
-                        OutlinedTextField(
-                            value = ollamaModelText,
-                            onValueChange = {
-                                ollamaModelText = it
-                                viewModel.setOllamaModel(it)
-                            },
-                            placeholder = { Text("如 qwen2.5:7b") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
+                        // 使用提示
                         Text(
                             text = "提示：模拟器用 10.0.2.2 访问宿主机 Ollama；真机用局域网 IP。点击「刷新列表」可获取 PC 上已安装的模型",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-
-                    // Gemini 配置
-                    if (llmProvider == "GEMINI") {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Gemini API Key",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        var geminiKeyText by remember(geminiApiKey) { mutableStateOf(geminiApiKey) }
-                        OutlinedTextField(
-                            value = geminiKeyText,
-                            onValueChange = {
-                                geminiKeyText = it
-                                viewModel.setGeminiApiKey(it)
-                            },
-                            placeholder = { Text("输入 Gemini API Key") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
                         )
                     }
                 }
@@ -428,6 +482,42 @@ fun SettingsScreen(
                         onClick = {
                             LingShuLog.d(SETTINGS_TAG, "navigate to Community")
                             onNavigateToCommunity()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.Star,
+                        title = "健康数据",
+                        description = "查看睡眠、心率等健康指标",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to Health")
+                            onNavigateToHealth()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.Search,
+                        title = "记忆管理",
+                        description = "查看与管理 AI 记住的偏好与事实",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to Memory")
+                            onNavigateToMemory()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.AccountCircle,
+                        title = "人格特质",
+                        description = "查看与重置 AI 的人格画像",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to Persona")
+                            onNavigateToPersona()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.Info,
+                        title = "主动关怀",
+                        description = "配置定时提醒与关怀触发规则",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to Proactive")
+                            onNavigateToProactive()
                         }
                     )
                 }
@@ -558,29 +648,30 @@ private fun SettingsItem(
     }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
-    private val ollamaProvider: com.lingshu.core.data.llm.OllamaProvider
+    private val ollamaProvider: com.lingshu.core.data.llm.OllamaProvider,
+    private val llmConfigStore: LlmConfigStore
 ) : ViewModel() {
 
+    private val vmTag = "SettingsVM"
+
+    // 顶部「API 设置」区块使用（旧 AppPreferences，保留兼容）
     private val _apiKey = MutableStateFlow("")
     val apiKey: StateFlow<String> = _apiKey.asStateFlow()
 
     private val _ttsEnabled = MutableStateFlow(true)
     val ttsEnabled: StateFlow<Boolean> = _ttsEnabled.asStateFlow()
 
-    private val _llmProvider = MutableStateFlow("OLLAMA")
-    val llmProvider: StateFlow<String> = _llmProvider.asStateFlow()
+    // 当前选中的 Provider，来自 LlmConfigStore
+    private val _llmProvider = MutableStateFlow(ModelProviderType.DEEPSEEK)
+    val llmProvider: StateFlow<ModelProviderType> = _llmProvider.asStateFlow()
 
-    private val _ollamaUrl = MutableStateFlow("http://10.0.2.2:11434")
-    val ollamaUrl: StateFlow<String> = _ollamaUrl.asStateFlow()
-
-    private val _ollamaModel = MutableStateFlow("qwen2.5:0.5b")
-    val ollamaModel: StateFlow<String> = _ollamaModel.asStateFlow()
-
-    private val _geminiApiKey = MutableStateFlow("")
-    val geminiApiKey: StateFlow<String> = _geminiApiKey.asStateFlow()
+    // 当前 Provider 的配置流，切换 Provider 时自动刷新
+    private val _currentConfig = MutableStateFlow(LlmConfig())
+    val currentConfig: StateFlow<LlmConfig> = _currentConfig.asStateFlow()
 
     // Ollama 可用模型列表（从服务动态拉取）
     private val _ollamaModels = MutableStateFlow<List<String>>(emptyList())
@@ -593,25 +684,41 @@ class SettingsViewModel @Inject constructor(
     val modelsError: StateFlow<String?> = _modelsError.asStateFlow()
 
     init {
+        LingShuLog.i(vmTag, "init: SettingsViewModel created")
+
+        // 顶部「API 设置」区块的 API Key（AppPreferences，保留兼容）
         viewModelScope.launch {
             appPreferences.apiKey.collect { key ->
                 _apiKey.value = key
             }
         }
-        viewModelScope.launch {
-            appPreferences.llmProvider.collect { _llmProvider.value = it }
-        }
-        viewModelScope.launch {
-            appPreferences.ollamaUrl.collect { _ollamaUrl.value = it }
-        }
-        viewModelScope.launch {
-            appPreferences.ollamaModel.collect { _ollamaModel.value = it }
-        }
-        viewModelScope.launch {
-            appPreferences.geminiApiKey.collect { _geminiApiKey.value = it }
-        }
+
+        // 选中的 Provider 来自 LlmConfigStore
+        llmConfigStore.selectedProvider
+            .onEach { provider ->
+                _llmProvider.value = provider
+                LingShuLog.d(vmTag, "selectedProvider collected: ${provider.name}")
+            }
+            .launchIn(viewModelScope)
+
+        // 当前 Provider 的配置流：Provider 切换时自动加载对应配置
+        _llmProvider
+            .flatMapLatest { provider ->
+                LingShuLog.d(vmTag, "currentProvider changed, loading config for ${provider.name}")
+                llmConfigStore.getConfigFlow(provider)
+            }
+            .onEach { config ->
+                _currentConfig.value = config
+                LingShuLog.d(
+                    vmTag,
+                    "currentConfig updated: provider=${config.provider.name}, " +
+                            "model=${config.modelName}, url=${config.baseUrl}"
+                )
+            }
+            .launchIn(viewModelScope)
     }
 
+    /** 顶部「API 设置」区块使用，写入旧 AppPreferences（保留兼容） */
     fun setApiKey(key: String) {
         _apiKey.value = key
         viewModelScope.launch {
@@ -619,31 +726,42 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /** 切换 LLM Provider，写入 LlmConfigStore */
     fun setLlmProvider(provider: String) {
-        _llmProvider.value = provider
+        val type = runCatching { ModelProviderType.valueOf(provider) }.getOrNull() ?: run {
+            LingShuLog.w(vmTag, "setLlmProvider: unknown provider=$provider, ignore")
+            return
+        }
+        _llmProvider.value = type
         viewModelScope.launch {
-            appPreferences.setLlmProvider(provider)
+            llmConfigStore.setSelectedProvider(type)
         }
     }
 
-    fun setOllamaUrl(url: String) {
-        _ollamaUrl.value = url
+    /** 保存 API Key 到当前 Provider 的配置 */
+    fun saveApiKey(key: String) {
+        val updated = _currentConfig.value.copy(apiKey = key)
+        _currentConfig.value = updated
         viewModelScope.launch {
-            appPreferences.setOllamaUrl(url)
+            llmConfigStore.saveConfig(updated)
         }
     }
 
-    fun setOllamaModel(model: String) {
-        _ollamaModel.value = model
+    /** 保存 Base URL 到当前 Provider 的配置 */
+    fun saveBaseUrl(url: String) {
+        val updated = _currentConfig.value.copy(baseUrl = url)
+        _currentConfig.value = updated
         viewModelScope.launch {
-            appPreferences.setOllamaModel(model)
+            llmConfigStore.saveConfig(updated)
         }
     }
 
-    fun setGeminiApiKey(key: String) {
-        _geminiApiKey.value = key
+    /** 保存模型名到当前 Provider 的配置 */
+    fun saveModelName(model: String) {
+        val updated = _currentConfig.value.copy(modelName = model)
+        _currentConfig.value = updated
         viewModelScope.launch {
-            appPreferences.setGeminiApiKey(key)
+            llmConfigStore.saveConfig(updated)
         }
     }
 
@@ -653,20 +771,22 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * 从 Ollama 服务拉取已安装的模型列表，用于在 UI 中选择。
+     * 使用当前 Provider 配置中的 baseUrl 作为服务地址。
      */
     fun refreshOllamaModels() {
         viewModelScope.launch {
             _modelsLoading.value = true
             _modelsError.value = null
-            val result = ollamaProvider.listInstalledModels(_ollamaUrl.value)
+            val url = _currentConfig.value.baseUrl
+            val result = ollamaProvider.listInstalledModels(url)
             when (result) {
                 is com.lingshu.core.common.error.Result.Success -> {
                     _ollamaModels.value = result.data
-                    LingShuLog.i("SettingsVM", "刷新模型列表成功: ${result.data}")
+                    LingShuLog.i(vmTag, "刷新模型列表成功: ${result.data}")
                 }
                 is com.lingshu.core.common.error.Result.Error -> {
                     _modelsError.value = result.message
-                    LingShuLog.w("SettingsVM", "刷新模型列表失败: ${result.message}")
+                    LingShuLog.w(vmTag, "刷新模型列表失败: ${result.message}")
                 }
             }
             _modelsLoading.value = false

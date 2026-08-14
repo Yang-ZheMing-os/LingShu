@@ -21,6 +21,7 @@ class PersonaServiceImpl @Inject constructor(
 
     private val _personaHistory = MutableStateFlow<List<PersonaSnapshot>>(emptyList())
     private val maxHistorySize = 50
+    private val feedbackCounts = mutableMapOf<TraitType, Int>()
 
     override fun observeCurrentPersona(): Flow<Persona> {
         return combine(
@@ -120,7 +121,11 @@ class PersonaServiceImpl @Inject constructor(
             }
 
             changes.forEach { (trait, delta) ->
-                updateTrait(trait, delta)
+                val count = (feedbackCounts[trait] ?: 0) + 1
+                feedbackCounts[trait] = count
+                val decayFactor = 1f / kotlin.math.sqrt(count.toFloat())
+                val adjustedDelta = delta * decayFactor
+                updateTrait(trait, adjustedDelta)
             }
 
             val newPersona = getCurrentPersona()
@@ -129,6 +134,55 @@ class PersonaServiceImpl @Inject constructor(
             LingShuLog.d(TAG, "人格演化完成，变化特质数: ${changes.size}")
         } catch (e: Exception) {
             LingShuLog.e(TAG, "人格演化失败", e)
+        }
+    }
+
+    override suspend fun exportPersona(): String {
+        val persona = getCurrentPersona()
+        val json = org.json.JSONObject().apply {
+            put("version", 1)
+            put("timestamp", System.currentTimeMillis())
+            put("persona", org.json.JSONObject().apply {
+                put("warmth", persona.warmth)
+                put("openness", persona.openness)
+                put("conscientiousness", persona.conscientiousness)
+                put("extraversion", persona.extraversion)
+                put("agreeableness", persona.agreeableness)
+                put("neuroticism", persona.neuroticism)
+                put("assertiveness", persona.assertiveness)
+                put("humor", persona.humor)
+                put("formality", persona.formality)
+            })
+        }
+        return json.toString(2)
+    }
+
+    override suspend fun importPersona(json: String): Boolean {
+        return try {
+            val obj = org.json.JSONObject(json)
+            val personaObj = obj.getJSONObject("persona")
+            val traits = listOf(
+                TraitType.WARMTH to personaObj.optDouble("warmth", 0.5).toFloat(),
+                TraitType.OPENNESS to personaObj.optDouble("openness", 0.5).toFloat(),
+                TraitType.CONSCIENTIOUSNESS to personaObj.optDouble("conscientiousness", 0.5).toFloat(),
+                TraitType.EXTRAVERSION to personaObj.optDouble("extraversion", 0.5).toFloat(),
+                TraitType.AGREEABLENESS to personaObj.optDouble("agreeableness", 0.5).toFloat(),
+                TraitType.NEUROTICISM to personaObj.optDouble("neuroticism", 0.3).toFloat(),
+                TraitType.ASSERTIVENESS to personaObj.optDouble("assertiveness", 0.4).toFloat(),
+                TraitType.HUMOR to personaObj.optDouble("humor", 0.4).toFloat(),
+                TraitType.FORMALITY to personaObj.optDouble("formality", 0.5).toFloat()
+            )
+            val current = getCurrentPersona()
+            traits.forEach { (trait, targetValue) ->
+                val delta = targetValue - current.getTrait(trait)
+                val key = getPreferenceKey(trait)
+                appPreferences.setPersonaTrait(key, targetValue.coerceIn(0f, 1f))
+            }
+            LingShuLog.i(TAG, "Persona imported successfully")
+            true
+        } catch (e: Exception) {
+            LingShuLog.e(TAG, "Failed to import persona: ${e.message}", e)
+            false
         }
     }
 

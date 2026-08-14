@@ -45,8 +45,8 @@ object LlmModule {
 
     @Provides
     @Singleton
-    fun provideLlmConfigStore(@ApplicationContext context: Context): LlmConfigStore {
-        return LlmConfigStore(context)
+    fun provideLlmConfigStore(@ApplicationContext context: Context, cryptoHelper: com.lingshu.core.common.security.CryptoHelper): LlmConfigStore {
+        return LlmConfigStore(context, cryptoHelper)
     }
 }
 

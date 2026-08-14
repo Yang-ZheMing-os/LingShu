@@ -14,9 +14,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 @HiltViewModel
 class UpdateViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val updateService: IUpdateService,
     private val errorReportManager: ErrorReportManager
 ) : ViewModel() {
@@ -111,11 +114,17 @@ class UpdateViewModel @Inject constructor(
     }
 
     fun getCurrentVersion(): String {
-        var version = "1.0.0"
-        viewModelScope.launch {
-            version = updateService.getCurrentVersion()
+        return try {
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                packageInfo.longVersionCode.toString()
+            } else {
+                @Suppress("DEPRECATION")
+                packageInfo.versionCode.toString()
+            }
+        } catch (e: Exception) {
+            "1.0.0"
         }
-        return version
     }
 
     fun hasReachedCrashThreshold(): Boolean {

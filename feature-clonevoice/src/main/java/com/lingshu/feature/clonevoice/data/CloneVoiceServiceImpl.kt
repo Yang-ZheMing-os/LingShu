@@ -1,15 +1,21 @@
 package com.lingshu.feature.clonevoice.data
 
 import android.content.Context
+import android.media.MediaPlayer
 import android.media.MediaRecorder
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import com.lingshu.core.common.error.ErrorCodes
 import com.lingshu.core.common.error.Result
 import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.feature.clonevoice.domain.ICloneVoiceService
 import com.lingshu.feature.clonevoice.domain.Voice
+import com.lingshu.feature.offlinetts.data.OfflineTtsRouter
+import com.lingshu.feature.offlinetts.domain.OfflineTtsConfig
+import com.lingshu.feature.offlinetts.domain.OfflineTtsProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
@@ -18,11 +24,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
+import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 class CloneVoiceServiceImpl @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val ttsRouter: OfflineTtsRouter
 ) : ICloneVoiceService {
 
     private val voices = mutableListOf<Voice>()
@@ -31,6 +42,8 @@ class CloneVoiceServiceImpl @Inject constructor(
     private var isRecording = false
     private var recordingStartTime = 0L
     private var sdkInitializationState = SdkInitState.UNINITIALIZED
+    // 当前录音输出文件，startRecording 时保存，stopRecording 时直接返回
+    private var currentRecordingFile: File? = null
 
     private val voicesDir: File by lazy {
         File(context.filesDir, "voices").apply {
@@ -75,20 +88,12 @@ class CloneVoiceServiceImpl @Inject constructor(
         LingShuLog.d(TAG, "[$traceId] [SDK初始化] 状态: UNINITIALIZED -> INITIALIZING")
 
         try {
-            // TODO: 接入真实 Soniqo Speech SDK
-            // val sdk = SoniqoSdk.init(context, apiKey)
-            // sdk.checkLicense() -> 验证授权
-
-            LingShuLog.d(TAG, "[$traceId] [SDK初始化] 检查 SDK 配置文件...")
-            // 检查 assets 或 raw 目录下的 SDK 配置
-
-            LingShuLog.d(TAG, "[$traceId] [SDK初始化] 检查 SDK 授权信息...")
-            // 读取本地授权文件或连接授权服务器
-
-            // Mock: 暂用未授权状态，等待真实接入
+            // 当前为样本保存模式，不依赖外部 SDK：
+            // - 克隆：仅保存用户录制的声音样本
+            // - 预览：走 OfflineTtsRouter（内置 Android 系统 TTS 兜底）
+            // TODO: 接入真实 Soniqo Speech SDK 后，在此处初始化并训练模型
             sdkInitializationState = SdkInitState.NOT_LICENSED
-            LingShuLog.w(TAG, "[$traceId] [SDK初始化] ⚠ SDK 尚未授权，当前使用 Mock 模式。" +
-                    "请联系 Soniqo 官方获取授权后，替换 TODO 位置的初始化代码。")
+            LingShuLog.w(TAG, "[$traceId] [SDK初始化] ⚠ SDK 尚未授权，克隆采用样本保存模式，预览使用 OfflineTtsRouter。")
             LingShuLog.d(TAG, "[$traceId] [SDK初始化] 最终状态: $sdkInitializationState")
         } catch (e: Exception) {
             sdkInitializationState = SdkInitState.FAILED
@@ -102,8 +107,8 @@ class CloneVoiceServiceImpl @Inject constructor(
         try {
             val subDirs = voicesDir.listFiles { file -> file.isDirectory }
             if (subDirs.isNullOrEmpty()) {
-                LingShuLog.d(TAG, "[$traceId] [加载声音] 目录为空，使用预置 Mock 声音")
-                addMockVoices(traceId)
+                LingShuLog.d(TAG, "[$traceId] [加载声音] 目录为空，使用系统默认音色")
+                addSystemVoice(traceId)
                 return
             }
 
@@ -116,16 +121,17 @@ class CloneVoiceServiceImpl @Inject constructor(
                 }
             }
 
-            if (voices.isEmpty()) {
-                addMockVoices(traceId)
-            } else {
+            // 始终补充一个系统默认音色，保证预览可用
+            addSystemVoice(traceId)
+
+            if (currentVoice == null) {
                 currentVoice = voices.firstOrNull()
-                LingShuLog.i(TAG, "[$traceId] [加载声音] 成功加载 ${voices.size} 个声音，" +
-                        "当前默认=${currentVoice?.name ?: "null"}")
             }
+            LingShuLog.i(TAG, "[$traceId] [加载声音] 成功加载 ${voices.size} 个声音，" +
+                    "当前默认=${currentVoice?.name ?: "null"}")
         } catch (e: Exception) {
             LingShuLog.e(TAG, "[$traceId] [加载声音] 扫描目录异常", e)
-            addMockVoices(traceId)
+            addSystemVoice(traceId)
         }
     }
 
@@ -156,42 +162,48 @@ class CloneVoiceServiceImpl @Inject constructor(
             name = (metadata["name"] as? String) ?: voiceId,
             modelPath = modelDir.absolutePath,
             samplePath = sampleFile.absolutePath,
-            createdAt = (metadata["createdAt"] as? Long) ?: dir.lastModified()
+            createdAt = (metadata["createdAt"] as? Long) ?: dir.lastModified(),
+            // 用户录制的声音：无系统 Voice 名，使用默认 pitch/rate
+            voiceName = parseNullableString(metadata["voiceName"]),
+            pitch = parseFloat(metadata["pitch"]) ?: 1.0f,
+            rate = parseFloat(metadata["rate"]) ?: 1.0f,
+            isSystemVoice = parseBoolean(metadata["isSystemVoice"])
         )
         voices.add(voice)
         LingShuLog.d(TAG, "[$traceId] [加载声音] 成功 voiceId=$voiceId, name=${voice.name}, " +
                 "createdAt=${formatDate(voice.createdAt)}")
     }
 
-    private fun addMockVoices(traceId: String) {
-        LingShuLog.d(TAG, "[$traceId] [Mock声音] 初始化预置声音")
-        val mockVoices = listOf(
-            Voice(
-                id = "voice_001",
-                name = "默认女声",
-                modelPath = "${voicesDir.absolutePath}/voice_001/model/",
-                samplePath = "${voicesDir.absolutePath}/voice_001/sample.wav",
-                createdAt = System.currentTimeMillis() - 86400000 * 7
-            ),
-            Voice(
-                id = "voice_002",
-                name = "沉稳男声",
-                modelPath = "${voicesDir.absolutePath}/voice_002/model/",
-                samplePath = "${voicesDir.absolutePath}/voice_002/sample.wav",
-                createdAt = System.currentTimeMillis() - 86400000 * 3
-            )
+    /**
+     * 添加预置系统音色（基于 Android TTS 的 pitch/rate 调整，无需模型/样本文件）。
+     * 提供多种音色风格供用户选择，每个均标注 isSystemVoice=true，voiceName=null（用默认 Voice）。
+     */
+    private fun addSystemVoice(traceId: String) {
+        LingShuLog.d(TAG, "[$traceId] [系统音色] 初始化预置系统音色")
+        // id, 显示名, pitch, rate
+        val presets: List<Voice> = listOf(
+            Voice("sys_gentle_female", "温柔女声", "", "", System.currentTimeMillis(), null, 1.2f, 0.9f, true),
+            Voice("sys_calm_male", "沉稳男声", "", "", System.currentTimeMillis(), null, 0.8f, 1.0f, true),
+            Voice("sys_lively_girl", "活泼少女", "", "", System.currentTimeMillis(), null, 1.5f, 1.1f, true),
+            Voice("sys_standard_female", "标准女声", "", "", System.currentTimeMillis(), null, 1.0f, 1.0f, true),
+            Voice("sys_standard_male", "标准男声", "", "", System.currentTimeMillis(), null, 0.9f, 1.0f, true)
         )
-        voices.addAll(mockVoices)
-        currentVoice = voices.firstOrNull()
-        LingShuLog.i(TAG, "[$traceId] [Mock声音] 添加了 ${mockVoices.size} 个预置声音，" +
-                "默认=${currentVoice?.name}")
+        var added = 0
+        presets.forEach { preset ->
+            // 按 id 去重，避免重复添加
+            if (voices.any { it.id == preset.id }) return@forEach
+            voices.add(preset)
+            added++
+        }
+        if (currentVoice == null) currentVoice = voices.firstOrNull()
+        LingShuLog.i(TAG, "[$traceId] [系统音色] 已添加 $added 个预置音色，当前共 ${voices.size} 个声音")
     }
 
     // ========================================
     // 录音相关 - 详细埋点
     // ========================================
 
-    suspend fun startRecording(outputFile: File): Result<Unit> {
+    override suspend fun startRecording(outputFile: File): Result<Unit> {
         val traceId = "rec_${System.currentTimeMillis()}"
         LingShuLog.i(TAG, "[$traceId] ===== 开始录音 =====")
         LingShuLog.d(TAG, "[$traceId] [录音] 输出文件: ${outputFile.absolutePath}")
@@ -203,17 +215,25 @@ class CloneVoiceServiceImpl @Inject constructor(
             return Result.error(ErrorCodes.UNKNOWN_ERROR, "录音已在进行中")
         }
 
+        // 保存本次录音输出文件路径，stopRecording 时直接返回（不再按修改时间查找）
+        currentRecordingFile = outputFile
+        LingShuLog.d(TAG, "[$traceId] [录音] 记录输出文件: ${outputFile.absolutePath}")
+
         // 1. 存储空间检查
         val (freeBytes, freeStr) = checkStorageSpace()
         LingShuLog.d(TAG, "[$traceId] [录音] 可用空间: $freeStr")
         if (freeBytes < RECORDING_MIN_STORAGE) {
             LingShuLog.e(TAG, "[$traceId] [录音] ❌ 存储空间不足，需要至少 50MB")
+            currentRecordingFile = null
             return Result.error(ErrorCodes.STORAGE_INSUFFICIENT,
                     ErrorCodes.getMessage(ErrorCodes.STORAGE_INSUFFICIENT))
         }
 
         return try {
             withContext(Dispatchers.Main) {
+                // 确保输出目录存在
+                outputFile.parentFile?.mkdirs()
+
                 recordingStartTime = System.currentTimeMillis()
 
                 // 2. 初始化 MediaRecorder
@@ -251,8 +271,9 @@ class CloneVoiceServiceImpl @Inject constructor(
             }
             Result.success(Unit)
         } catch (e: Exception) {
-            LingShuLog.e(TAG, "[$traceId] [录音] ❌ 录音启动失败", e)
+            LingShuLog.e(TAG, "[$traceId] [录音] ❌ 录音启动失败（模拟器无麦克风时会到此分支）", e)
             cleanupRecorder(traceId)
+            currentRecordingFile = null
             Result.error(
                 ErrorCodes.MICROPHONE_UNAVAILABLE,
                 ErrorCodes.getMessage(ErrorCodes.MICROPHONE_UNAVAILABLE),
@@ -261,51 +282,59 @@ class CloneVoiceServiceImpl @Inject constructor(
         }
     }
 
-    fun stopRecording(): Result<File> {
+    override suspend fun stopRecording(): Result<File> {
         val traceId = "stp_${System.currentTimeMillis()}"
         val duration = System.currentTimeMillis() - recordingStartTime
-        LingShuLog.i(TAG, "[$traceId] ===== 停止录音，录制时长=${duration}ms (${(duration/1000)}s) =====")
+        LingShuLog.i(TAG, "[$traceId] ===== 停止录音，录制时长=${duration}ms (${duration/1000}s) =====")
+
+        val targetFile = currentRecordingFile
 
         if (!isRecording || mediaRecorder == null) {
             LingShuLog.w(TAG, "[$traceId] [录音] 当前未在录音状态，isRecording=$isRecording")
+            currentRecordingFile = null
             return Result.error(ErrorCodes.MICROPHONE_UNAVAILABLE, "当前未在录音")
         }
 
         return try {
-            val stopStart = System.currentTimeMillis()
-            mediaRecorder?.stop()
-            LingShuLog.d(TAG, "[$traceId] [录音] stop() 完成，耗时 ${System.currentTimeMillis()-stopStart}ms")
+            withContext(Dispatchers.Main) {
+                val stopStart = System.currentTimeMillis()
+                mediaRecorder?.stop()
+                LingShuLog.d(TAG, "[$traceId] [录音] stop() 完成，耗时 ${System.currentTimeMillis()-stopStart}ms")
+            }
 
             // 录音时长校验
             if (duration < 10000) {
-                LingShuLog.w(TAG, "[$traceId] [录音] ⚠ 录制时长不足10秒 (${(duration/1000)}s)，" +
+                LingShuLog.w(TAG, "[$traceId] [录音] ⚠ 录制时长不足10秒 (${duration/1000}s)，" +
                         "建议 10-30 秒以获得更好的克隆效果")
             } else if (duration > 30000) {
-                LingShuLog.w(TAG, "[$traceId] [录音] ⚠ 录制时长超过30秒 (${(duration/1000)}s)，" +
+                LingShuLog.w(TAG, "[$traceId] [录音] ⚠ 录制时长超过30秒 (${duration/1000}s)，" +
                         "过长可能影响处理速度")
             }
 
-            val recorder = mediaRecorder
-            val outputFile = File(recorder.toString()) // 此处仅示例，真实要拿到 path
-            val realFile = getLastRecordingFile(context)
-            LingShuLog.d(TAG, "[$traceId] [录音] 输出文件大小: ${realFile?.length() ?: 0} bytes")
-
             cleanupRecorder(traceId)
 
-            if (realFile == null) {
-                LingShuLog.e(TAG, "[$traceId] [录音] ❌ 无法获取录制文件")
-                return Result.error(ErrorCodes.MICROPHONE_UNAVAILABLE, "无法获取录制文件")
+            // 直接返回 startRecording 时记录的输出文件，不再按修改时间查找
+            if (targetFile == null || !targetFile.exists() || targetFile.length() == 0L) {
+                LingShuLog.e(TAG, "[$traceId] [录音] ❌ 录音文件无效: ${targetFile?.absolutePath}")
+                currentRecordingFile = null
+                return Result.error(ErrorCodes.MICROPHONE_UNAVAILABLE, "录音文件无效")
             }
 
-            LingShuLog.i(TAG, "[$traceId] [录音] ✅ 录音完成，文件=${realFile.absolutePath}，" +
-                    "大小=${formatFileSize(realFile.length())}")
-            Result.success(realFile)
+            LingShuLog.d(TAG, "[$traceId] [录音] 输出文件大小: ${targetFile.length()} bytes")
+            currentRecordingFile = null
+
+            LingShuLog.i(TAG, "[$traceId] [录音] ✅ 录音完成，文件=${targetFile.absolutePath}，" +
+                    "大小=${formatFileSize(targetFile.length())}")
+            Result.success(targetFile)
         } catch (e: Exception) {
             LingShuLog.e(TAG, "[$traceId] [录音] ❌ 停止录音失败", e)
             cleanupRecorder(traceId)
+            currentRecordingFile = null
             Result.error(ErrorCodes.MICROPHONE_UNAVAILABLE, "停止录音失败", e)
         }
     }
+
+    override fun isRecording(): Boolean = isRecording
 
     private fun cleanupRecorder(traceId: String) {
         LingShuLog.d(TAG, "[$traceId] [录音] 清理 MediaRecorder 资源...")
@@ -339,7 +368,7 @@ class CloneVoiceServiceImpl @Inject constructor(
         LingShuLog.d(TAG, "[$traceId] [克隆-前置] SDK 初始化状态=$sdkInitializationState")
 
         // 1. 基础校验
-        LingShuLog.d(TAG, "[$traceId] [克隆-步骤1/7] 基础参数校验...")
+        LingShuLog.d(TAG, "[$traceId] [克隆-步骤1/6] 基础参数校验...")
         if (!audioFile.exists()) {
             LingShuLog.e(TAG, "[$traceId] [克隆-步骤1] ❌ 音频文件不存在: ${audioFile.absolutePath}")
             return Result.error(ErrorCodes.VOICE_CLONE_FAILED,
@@ -357,7 +386,7 @@ class CloneVoiceServiceImpl @Inject constructor(
         }
 
         // 2. 存储空间检查
-        LingShuLog.d(TAG, "[$traceId] [克隆-步骤2/7] 存储空间检查...")
+        LingShuLog.d(TAG, "[$traceId] [克隆-步骤2/6] 存储空间检查...")
         val (freeBytes, freeStr) = checkStorageSpace()
         LingShuLog.d(TAG, "[$traceId] [克隆-步骤2] 可用空间: $freeStr")
         if (freeBytes < REQUIRED_MIN_STORAGE) {
@@ -367,7 +396,7 @@ class CloneVoiceServiceImpl @Inject constructor(
         }
 
         // 3. 准备 voice 目录
-        LingShuLog.d(TAG, "[$traceId] [克隆-步骤3/7] 准备声音目录...")
+        LingShuLog.d(TAG, "[$traceId] [克隆-步骤3/6] 准备声音目录...")
         val voiceId = "voice_${UUID.randomUUID().toString().take(8)}"
         val voiceDir = File(voicesDir, voiceId)
         val modelDir = File(voiceDir, MODEL_DIR_NAME)
@@ -380,8 +409,8 @@ class CloneVoiceServiceImpl @Inject constructor(
                 "voiceDir=${voiceDir.absolutePath}, " +
                 "modelDir=${modelDir.absolutePath}")
 
-        // 4. 拷贝样本音频
-        LingShuLog.d(TAG, "[$traceId] [克隆-步骤4/7] 拷贝样本音频...")
+        // 4. 拷贝样本音频（保存用户录制的声音样本到 voiceDir/sample.wav）
+        LingShuLog.d(TAG, "[$traceId] [克隆-步骤4/6] 拷贝样本音频...")
         val copyStart = System.currentTimeMillis()
         val copyResult = copyFile(audioFile, sampleFile)
         LingShuLog.d(TAG, "[$traceId] [克隆-步骤4] 拷贝耗时=${System.currentTimeMillis()-copyStart}ms, " +
@@ -392,26 +421,14 @@ class CloneVoiceServiceImpl @Inject constructor(
             return Result.error(ErrorCodes.VOICE_CLONE_FAILED, "样本文件保存失败")
         }
 
-        // 5. 调用 SDK 克隆 (核心步骤)
-        LingShuLog.i(TAG, "[$traceId] [克隆-步骤5/7] ===== 调用声音克隆 SDK 开始 =====")
-        val sdkStart = System.currentTimeMillis()
-        val sdkResult = invokeSoniqoSdk(audioFile, modelDir, traceId)
-        val sdkCost = System.currentTimeMillis() - sdkStart
-        LingShuLog.i(TAG, "[$traceId] [克隆-步骤5] ===== 调用声音克隆 SDK 结束，耗时=${sdkCost}ms，结果=${sdkResult.isSuccess} =====")
+        // 5. 样本保存模式：不进行真实模型训练，仅保存用户录制的声音样本。
+        //    modelDir 已创建（空目录），预留给后续真实模型训练接入。
+        LingShuLog.i(TAG, "[$traceId] [克隆-步骤5/6] 保存录音样本（样本模式，无需模型训练）")
+        LingShuLog.d(TAG, "[$traceId] [克隆-步骤5] sample=${sampleFile.absolutePath} " +
+                "(${formatFileSize(sampleFile.length())}), modelDir=${modelDir.absolutePath} (空)")
 
-        if (!sdkResult.isSuccess) {
-            val err = sdkResult.errorOrNull()
-            LingShuLog.e(TAG, "[$traceId] [克隆-步骤5] ❌ SDK 克隆失败: code=${err?.code}, msg=${err?.message}, cause=${err?.cause}")
-            cleanupVoiceDir(voiceDir, traceId)
-            return Result.error(
-                ErrorCodes.VOICE_CLONE_FAILED,
-                ErrorCodes.getMessage(ErrorCodes.VOICE_CLONE_FAILED),
-                err?.cause
-            )
-        }
-
-        // 6. 写入 metadata
-        LingShuLog.d(TAG, "[$traceId] [克隆-步骤6/7] 写入元数据...")
+        // 6. 写入 metadata 并加入内存列表
+        LingShuLog.d(TAG, "[$traceId] [克隆-步骤6/6] 写入元数据并加入内存列表...")
         val voiceName = "我的声音_${SimpleDateFormat("MMddHHmm", Locale.getDefault()).format(Date())}"
         val metadata = mapOf(
             "id" to voiceId,
@@ -420,109 +437,38 @@ class CloneVoiceServiceImpl @Inject constructor(
             "modelPath" to modelDir.absolutePath,
             "createdAt" to System.currentTimeMillis(),
             "durationSec" to duration,
-            "sdkState" to sdkInitializationState.name,
+            "type" to "sample",
+            // 音色配置：用户录音使用默认 Voice + 默认 pitch/rate
+            "voiceName" to "",
+            "pitch" to "1.0",
+            "rate" to "1.0",
+            "isSystemVoice" to "false",
             "traceId" to traceId
         )
         writeMetadata(metadataFile, metadata)
         LingShuLog.d(TAG, "[$traceId] [克隆-步骤6] metadata=${metadata}")
 
-        // 7. 加入内存列表
-        LingShuLog.d(TAG, "[$traceId] [克隆-步骤7/7] 加入内存管理列表...")
         val newVoice = Voice(
             id = voiceId,
             name = voiceName,
             modelPath = modelDir.absolutePath,
             samplePath = sampleFile.absolutePath,
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            // 用户录制的自定义声音：默认 Voice + 默认 pitch/rate
+            voiceName = null,
+            pitch = 1.0f,
+            rate = 1.0f,
+            isSystemVoice = false
         )
         voices.add(newVoice)
 
         val totalCost = System.currentTimeMillis() - startTime
         LingShuLog.i(TAG, "[$traceId] ========== cloneAudio 成功 ==========")
         LingShuLog.i(TAG, "[$traceId] [克隆-汇总] voiceId=$voiceId, name=$voiceName")
-        LingShuLog.i(TAG, "[$traceId] [克隆-汇总] 总耗时=${totalCost}ms (SDK耗时=$sdkCost ms)")
+        LingShuLog.i(TAG, "[$traceId] [克隆-汇总] 总耗时=${totalCost}ms")
         LingShuLog.i(TAG, "[$traceId] [克隆-汇总] 当前共有 ${voices.size} 个声音")
 
         return Result.success(voiceId)
-    }
-
-    /**
-     * 调用真实 Soniqo/CloneTTS SDK 的核心方法
-     * 当前为 Mock 实现，接入真实 SDK 时直接替换内部逻辑
-     */
-    private suspend fun invokeSoniqoSdk(audioFile: File, modelDir: File, traceId: String): Result<Unit> {
-        LingShuLog.d(TAG, "[$traceId] [SDK调用] SDK 初始化状态=$sdkInitializationState")
-        LingShuLog.d(TAG, "[$traceId] [SDK调用] 输入音频: ${audioFile.absolutePath} (${formatFileSize(audioFile.length())})")
-        LingShuLog.d(TAG, "[$traceId] [SDK调用] 模型输出目录: ${modelDir.absolutePath}")
-
-        if (sdkInitializationState == SdkInitState.UNINITIALIZED ||
-            sdkInitializationState == SdkInitState.FAILED) {
-            LingShuLog.w(TAG, "[$traceId] [SDK调用] ⚠ SDK 未正确初始化 (state=$sdkInitializationState)，" +
-                    "将使用 Mock 模拟流程")
-        }
-
-        // TODO: 接入真实 SDK，参考伪代码：
-        /*
-        val client = SoniqoClient(
-            context = context,
-            accessKey = getAccessKeyFromPreferences(),
-            baseUrl = "https://api.soniqo.ai/v1"
-        )
-        // 阶段1: 上传音频
-        val uploadResp = client.uploadAudio(
-            file = audioFile,
-            sampleRate = 16000,
-            channels = 1,
-            traceId = traceId
-        )
-        LingShuLog.d(TAG, "[$traceId] [SDK调用-上传] result=${uploadResp.status}, taskId=${uploadResp.taskId}")
-
-        // 阶段2: 提交克隆任务
-        val taskResp = client.submitCloneTask(
-            audioTaskId = uploadResp.taskId,
-            modelType = "V3",
-            language = "zh-CN",
-            traceId = traceId
-        )
-        LingShuLog.d(TAG, "[$traceId] [SDK调用-提交] taskId=${taskResp.taskId}, " +
-                "estimatedTime=${taskResp.estimatedSeconds}s")
-
-        // 阶段3: 轮询进度
-        var progress = 0
-        while (progress < 100) {
-            val statusResp = client.queryTaskStatus(taskResp.taskId, traceId)
-            progress = statusResp.progress
-            LingShuLog.d(TAG, "[$traceId] [SDK调用-进度] $progress%, status=${statusResp.state}")
-            reportProgress(progress)
-            delay(500)
-            if (statusResp.state == "FAILED") {
-                LingShuLog.e(TAG, "[$traceId] [SDK调用-失败] errCode=${statusResp.errCode}, " +
-                        "errMsg=${statusResp.errMsg}")
-                return Result.error(...)
-            }
-        }
-
-        // 阶段4: 下载模型
-        val modelResp = client.downloadModel(taskResp.taskId, modelDir, traceId)
-        LingShuLog.d(TAG, "[$traceId] [SDK调用-下载] 模型文件数=${modelResp.fileCount}")
-        */
-
-        // Mock: 模拟处理进度 (0 -> 100)
-        for (progress in 0..100 step 10) {
-            delay(300)
-            LingShuLog.d(TAG, "[$traceId] [SDK调用-Mock] 克隆进度: $progress%")
-        }
-
-        // Mock: 生成空的模型文件占位
-        val modelFiles = listOf("model.pt", "config.json", "vocab.txt", "speaker_embed.npy")
-        modelFiles.forEach { fileName ->
-            val f = File(modelDir, fileName)
-            f.writeText("# placeholder for ${fileName}\ntraceId=${traceId}")
-            LingShuLog.v(TAG, "[$traceId] [SDK调用-Mock] 创建占位模型文件: $fileName")
-        }
-
-        LingShuLog.d(TAG, "[$traceId] [SDK调用-Mock] ✅ 模拟克隆流程结束")
-        return Result.success(Unit)
     }
 
     // ========================================
@@ -530,8 +476,17 @@ class CloneVoiceServiceImpl @Inject constructor(
     // ========================================
 
     override suspend fun setCurrentVoice(voiceId: String): Result<Unit> {
-        val traceId = "scv_${System.currentTimeMillis()}"
-        LingShuLog.i(TAG, "[$traceId] setCurrentVoice: voiceId=$voiceId")
+        // 选中即应用：转发到 applyVoice，将音色配置写入 TTS 引擎
+        return applyVoice(voiceId)
+    }
+
+    /**
+     * 应用指定音色到 TTS 引擎并切换为当前音色。
+     * 读取 voice 的 voiceName/pitch/rate，调用 ttsRouter.setVoiceConfig 生效。
+     */
+    override suspend fun applyVoice(voiceId: String): Result<Unit> {
+        val traceId = "apv_${System.currentTimeMillis()}"
+        LingShuLog.i(TAG, "[$traceId] applyVoice: voiceId=$voiceId")
         LingShuLog.d(TAG, "[$traceId] 当前=${currentVoice?.id}(${currentVoice?.name}), " +
                 "共有 ${voices.size} 个可选")
 
@@ -542,19 +497,31 @@ class CloneVoiceServiceImpl @Inject constructor(
                 return Result.error(ErrorCodes.UNKNOWN_ERROR, "声音不存在: $voiceId")
             }
 
-            // 检查模型目录
-            val modelDir = File(voice.modelPath)
-            val sampleExists = File(voice.samplePath).exists()
-            LingShuLog.d(TAG, "[$traceId] 模型目录存在=${modelDir.exists()}, " +
-                    "样本文件存在=$sampleExists, " +
-                    "模型文件数=${modelDir.listFiles()?.size ?: 0}")
+            // 检查模型目录（系统音色 modelPath 为空，跳过检查）
+            if (voice.modelPath.isNotEmpty()) {
+                val modelDir = File(voice.modelPath)
+                val sampleExists = File(voice.samplePath).exists()
+                LingShuLog.d(TAG, "[$traceId] 模型目录存在=${modelDir.exists()}, " +
+                        "样本文件存在=$sampleExists, " +
+                        "模型文件数=${modelDir.listFiles()?.size ?: 0}")
+            } else {
+                LingShuLog.d(TAG, "[$traceId] 系统音色，跳过模型目录检查")
+            }
 
             currentVoice = voice
+
+            // 应用音色配置到 TTS 引擎（系统 Voice 名 + pitch + rate）
+            // Android 系统 TTS 不支持用录音做真实声音克隆，通过 pitch/rate/voice 调整音色
+            try {
+                ttsRouter.setVoiceConfig(voice.voiceName, voice.pitch, voice.rate)
+                LingShuLog.i(TAG, "[$traceId] ✅ 已应用音色到 TTS: ${voice.name} " +
+                        "(voiceName=${voice.voiceName}, pitch=${voice.pitch}, rate=${voice.rate})")
+            } catch (e: Exception) {
+                // 应用失败不影响选中状态，TTS 将沿用上一次配置
+                LingShuLog.w(TAG, "[$traceId] 应用音色配置异常（不影响选中）", e)
+            }
+
             LingShuLog.i(TAG, "[$traceId] ✅ 切换成功: ${voice.name} (id=${voice.id})")
-
-            // TODO: 通知 TTS 引擎切换声音
-            LingShuLog.d(TAG, "[$traceId] 已触发 TTS 引擎切换通知（待接入 ITtsEngine#setVoice）")
-
             Result.success(Unit)
         } catch (e: Exception) {
             LingShuLog.e(TAG, "[$traceId] ❌ 切换失败", e)
@@ -599,12 +566,16 @@ class CloneVoiceServiceImpl @Inject constructor(
                 return Result.success(Unit)
             }
 
-            // 删除物理文件
-            LingShuLog.d(TAG, "[$traceId] 删除物理文件: ${deletedVoice!!.modelPath.substringBeforeLast("/")}")
-            val voiceDir = File(voicesDir, voiceId)
-            if (voiceDir.exists()) {
-                val deleted = deleteRecursive(voiceDir)
-                LingShuLog.d(TAG, "[$traceId] 物理删除结果: $deleted")
+            // 系统音色无物理文件，跳过物理删除
+            if (deletedVoice?.isSystemVoice != true) {
+                LingShuLog.d(TAG, "[$traceId] 删除物理文件: ${deletedVoice?.modelPath?.substringBeforeLast("/")}")
+                val voiceDir = File(voicesDir, voiceId)
+                if (voiceDir.exists()) {
+                    val deleted = deleteRecursive(voiceDir)
+                    LingShuLog.d(TAG, "[$traceId] 物理删除结果: $deleted")
+                }
+            } else {
+                LingShuLog.d(TAG, "[$traceId] 系统音色，仅移除内存引用")
             }
 
             // 如果删除的是当前声音，回退到第一个
@@ -613,7 +584,7 @@ class CloneVoiceServiceImpl @Inject constructor(
                 LingShuLog.w(TAG, "[$traceId] 已删除当前声音，自动切换到: ${currentVoice?.name ?: "null"}")
             }
 
-            LingShuLog.i(TAG, "[$traceId] ✅ 删除成功: ${deletedVoice.name}，剩余 ${voices.size} 个")
+            LingShuLog.i(TAG, "[$traceId] ✅ 删除成功: ${deletedVoice?.name}，剩余 ${voices.size} 个")
             Result.success(Unit)
         } catch (e: Exception) {
             LingShuLog.e(TAG, "[$traceId] ❌ 删除失败", e)
@@ -633,25 +604,181 @@ class CloneVoiceServiceImpl @Inject constructor(
                 LingShuLog.e(TAG, "[$traceId] ❌ 声音不存在: $voiceId")
                 return Result.error(ErrorCodes.UNKNOWN_ERROR, "声音不存在")
             }
+            if (text.isBlank()) {
+                LingShuLog.w(TAG, "[$traceId] ⚠ 试听文本为空")
+                return Result.error(ErrorCodes.TTS_UNAVAILABLE, "试听文本为空")
+            }
             LingShuLog.d(TAG, "[$traceId] 目标声音: name=${voice.name}, model=${voice.modelPath}")
-            LingShuLog.d(TAG, "[$traceId] 样本文件: exists=${File(voice.samplePath).exists()}, " +
-                    "size=${formatFileSize(File(voice.samplePath).length())}")
 
-            // TODO: 接入真实 TTS 使用该声音生成
-            /*
-            val audioFile = ttsEngine.synthesize(text, voiceId = voiceId)
-            playAudio(audioFile)
-            */
+            // 1. 准备合成输出文件
+            val previewDir = File(context.cacheDir, "tts_preview").apply { mkdirs() }
+            val audioFile = File(previewDir, "preview_${System.currentTimeMillis()}.wav")
 
-            LingShuLog.d(TAG, "[$traceId] [Mock] 模拟 TTS 合成 + 播放...")
-            delay(1000)
+            // 2. 优先使用 OfflineTtsRouter 合成（内部自带 Android 系统 TTS 兜底链）
+            var synthResult = synthesizeViaRouter(text, audioFile, traceId)
+
+            // 3. Router 不可用时，降级到 Android 系统 TextToSpeech
+            if (!synthResult.isSuccess) {
+                LingShuLog.w(TAG, "[$traceId] [试听] Router 合成失败，降级到系统 TextToSpeech")
+                synthResult = synthesizeViaAndroidTts(text, audioFile, traceId)
+            }
+
+            if (!synthResult.isSuccess) {
+                val err = synthResult.errorOrNull()
+                LingShuLog.e(TAG, "[$traceId] ❌ 试听合成失败: code=${err?.code}, msg=${err?.message}")
+                return Result.error(err?.code ?: ErrorCodes.TTS_UNAVAILABLE,
+                        err?.message ?: "语音合成失败")
+            }
+
+            val synthesizedFile = synthResult.getOrNull()!!
+            LingShuLog.d(TAG, "[$traceId] [试听] 合成文件: ${synthesizedFile.absolutePath}, " +
+                    "大小=${formatFileSize(synthesizedFile.length())}")
+
+            // 4. 用 MediaPlayer 播放合成的音频
+            val played = playAudioFile(synthesizedFile, traceId)
 
             val cost = System.currentTimeMillis() - startTime
-            LingShuLog.i(TAG, "[$traceId] ✅ 预览完成，耗时=${cost}ms (Mock)")
+            LingShuLog.i(TAG, "[$traceId] ✅ 预览完成，耗时=${cost}ms, 播放=$played")
             Result.success(Unit)
         } catch (e: Exception) {
             LingShuLog.e(TAG, "[$traceId] ❌ 预览失败", e)
-            Result.error(ErrorCodes.VOICE_CLONE_FAILED, "预览失败", e)
+            Result.error(ErrorCodes.TTS_UNAVAILABLE, "预览失败", e)
+        }
+    }
+
+    // ========================================
+    // TTS 合成与播放
+    // ========================================
+
+    /**
+     * 通过 OfflineTtsRouter 合成音频到指定文件。
+     * Router 内部降级链：Android 系统 TTS -> ChatTTS -> EdgeTTS。
+     */
+    private suspend fun synthesizeViaRouter(
+        text: String,
+        outputFile: File,
+        traceId: String
+    ): Result<File> {
+        return try {
+            if (!ttsRouter.isLoaded()) {
+                val config = OfflineTtsConfig(
+                    provider = OfflineTtsProvider.ANDROID_TTS,
+                    modelDir = "",
+                    voiceId = "default",
+                    speed = 1.0f,
+                    sampleRate = 24000
+                )
+                val loadResult = ttsRouter.load(config, "$traceId-LOAD")
+                if (!loadResult.isSuccess) {
+                    LingShuLog.w(TAG, "[$traceId] [试听] TTS 引擎加载失败: ${loadResult.errorOrNull()?.message}")
+                    return Result.error(ErrorCodes.TTS_UNAVAILABLE, "TTS 引擎加载失败")
+                }
+            }
+            ttsRouter.synthesize(text, outputFile, "$traceId-SYNTH")
+        } catch (e: Exception) {
+            LingShuLog.e(TAG, "[$traceId] [试听] Router 合成异常", e)
+            Result.error(ErrorCodes.TTS_UNAVAILABLE, "Router 合成异常", e)
+        }
+    }
+
+    /**
+     * 直接使用 Android 系统 TextToSpeech 合成音频（Router 不可用时的兜底）。
+     */
+    @Suppress("DEPRECATION")
+    private suspend fun synthesizeViaAndroidTts(
+        text: String,
+        outputFile: File,
+        traceId: String
+    ): Result<File> = withContext(Dispatchers.Main) {
+        LingShuLog.d(TAG, "[$traceId] [试听] 使用 Android 系统 TextToSpeech 合成")
+        val initLatch = CountDownLatch(1)
+        val initStatus = AtomicReference(TextToSpeech.ERROR)
+        var tts: TextToSpeech? = null
+        try {
+            tts = TextToSpeech(context.applicationContext) { status ->
+                initStatus.set(status)
+                initLatch.countDown()
+            }
+            if (!initLatch.await(10, TimeUnit.SECONDS) || initStatus.get() != TextToSpeech.SUCCESS) {
+                return@withContext Result.error(ErrorCodes.TTS_UNAVAILABLE, "系统 TTS 初始化失败")
+            }
+            tts.language = Locale.SIMPLIFIED_CHINESE
+
+            outputFile.parentFile?.mkdirs()
+            if (outputFile.exists()) outputFile.delete()
+
+            val doneLatch = CountDownLatch(1)
+            val errorRef = AtomicReference<String?>(null)
+            val uttId = "clone_preview_${System.currentTimeMillis()}"
+            tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
+                override fun onDone(utteranceId: String?) { doneLatch.countDown() }
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    errorRef.set("synthesize failed")
+                    doneLatch.countDown()
+                }
+            })
+            val params = android.os.Bundle().apply {
+                putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, uttId)
+            }
+            val r = tts.synthesizeToFile(text, params, outputFile, uttId)
+            if (r != TextToSpeech.SUCCESS) {
+                return@withContext Result.error(ErrorCodes.TTS_UNAVAILABLE, "synthesizeToFile 失败: $r")
+            }
+            if (!doneLatch.await(30, TimeUnit.SECONDS)) {
+                return@withContext Result.error(ErrorCodes.TTS_UNAVAILABLE, "系统 TTS 合成超时")
+            }
+            val err = errorRef.get()
+            if (err != null) {
+                return@withContext Result.error(ErrorCodes.TTS_UNAVAILABLE, err)
+            }
+            Result.success(outputFile)
+        } catch (e: Exception) {
+            LingShuLog.e(TAG, "[$traceId] [试听] Android TTS 兜底异常", e)
+            Result.error(ErrorCodes.TTS_UNAVAILABLE, "系统 TTS 异常", e)
+        } finally {
+            runCatching { tts?.stop() }
+            runCatching { tts?.shutdown() }
+        }
+    }
+
+    /**
+     * 使用 MediaPlayer 播放合成的音频文件，播放完成后返回。
+     */
+    private suspend fun playAudioFile(file: File, traceId: String): Boolean {
+        if (!file.exists() || file.length() == 0L) {
+            LingShuLog.w(TAG, "[$traceId] [试听] 音频文件无效，跳过播放")
+            return false
+        }
+        return withContext(Dispatchers.Main) {
+            suspendCancellableCoroutine { cont ->
+                val player = MediaPlayer()
+                try {
+                    player.setDataSource(file.absolutePath)
+                    player.setOnCompletionListener { mp ->
+                        LingShuLog.d(TAG, "[$traceId] [试听] 播放完成")
+                        runCatching { mp.release() }
+                        if (cont.isActive) cont.resume(true)
+                    }
+                    player.setOnErrorListener { mp, what, extra ->
+                        LingShuLog.e(TAG, "[$traceId] [试听] 播放出错 what=$what extra=$extra")
+                        runCatching { mp.release() }
+                        if (cont.isActive) cont.resume(false)
+                        true
+                    }
+                    player.prepare()
+                    player.start()
+                    LingShuLog.d(TAG, "[$traceId] [试听] 开始播放: ${file.absolutePath}")
+                } catch (e: Exception) {
+                    LingShuLog.e(TAG, "[$traceId] [试听] MediaPlayer 异常", e)
+                    runCatching { player.release() }
+                    if (cont.isActive) cont.resume(false)
+                }
+                cont.invokeOnCancellation {
+                    runCatching { player.release() }
+                }
+            }
         }
     }
 
@@ -704,6 +831,22 @@ class CloneVoiceServiceImpl @Inject constructor(
         }.getOrDefault(emptyMap())
     }
 
+    /** 将 metadata 值解析为 Long，失败返回 null。 */
+    private fun parseLong(value: Any?): Long? = value?.toString()?.toLongOrNull()
+
+    /** 将 metadata 值解析为 Float，失败返回 null。 */
+    private fun parseFloat(value: Any?): Float? = value?.toString()?.toFloatOrNull()
+
+    /** 将 metadata 值解析为 Boolean（仅 "true" 视为真）。 */
+    private fun parseBoolean(value: Any?): Boolean = value?.toString()?.lowercase() == "true"
+
+    /** 将 metadata 值解析为可空字符串：空串/"null" 视为 null。 */
+    private fun parseNullableString(value: Any?): String? {
+        val s = value?.toString()?.trim()
+        if (s.isNullOrEmpty() || s.equals("null", ignoreCase = true)) return null
+        return s
+    }
+
     private fun writeMetadata(file: File, metadata: Map<String, Any>) {
         runCatching {
             file.bufferedWriter().use { writer ->
@@ -742,12 +885,6 @@ class CloneVoiceServiceImpl @Inject constructor(
         return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(ts))
     }
 
-    private fun getLastRecordingFile(ctx: Context): File? {
-        // 简化实现：真实场景需保留录音输出路径
-        val dir = File(ctx.cacheDir, "recordings")
-        return dir.listFiles()?.maxByOrNull { it.lastModified() }
-    }
-
     enum class SdkInitState {
         UNINITIALIZED,  // 未初始化
         INITIALIZING,   // 初始化中
@@ -761,6 +898,7 @@ class CloneVoiceServiceImpl @Inject constructor(
         private const val MODEL_DIR_NAME = "model"
         private const val SAMPLE_FILE_NAME = "sample.wav"
         private const val METADATA_FILE_NAME = "metadata.properties"
+        private const val SYSTEM_VOICE_ID = "system_default"
 
         private const val REQUIRED_MIN_STORAGE = 500L * 1024 * 1024   // 500MB
         private const val RECORDING_MIN_STORAGE = 50L * 1024 * 1024    // 50MB

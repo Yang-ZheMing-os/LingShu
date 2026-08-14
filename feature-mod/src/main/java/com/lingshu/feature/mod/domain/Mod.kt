@@ -20,7 +20,11 @@ data class ModManifest(
     val mainScript: String = "skills/main.js",
     val minAppVersion: String = "1.0.0",
     val permissions: List<String>,
-    val permissionLevel: PermissionLevel
+    val permissionLevel: PermissionLevel,
+    val category: String = "other",
+    val versionCode: Int = 1,
+    val dependencies: List<String> = emptyList(),
+    val entryPoint: String = ""
 ) {
     companion object {
         /** 根据声明的权限列表，推导该 Mod 的权限级别 */

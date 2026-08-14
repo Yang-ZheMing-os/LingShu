@@ -12,6 +12,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -28,6 +30,10 @@ import com.lingshu.feature.floating.presentation.FloatingViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlin.math.abs
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.pm.ServiceInfo
+import androidx.core.app.NotificationCompat
 
 @AndroidEntryPoint
 class FloatingWindowService : Service(), IFloatingService {
@@ -56,8 +62,9 @@ class FloatingWindowService : Service(), IFloatingService {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        serviceLifecycle.onCreate()
         serviceLifecycle.performRestore(null)
+        serviceLifecycle.onCreate()
+        startForegroundNotification()
         LingShuLog.d("FloatingWindowService", "Service created")
     }
 
@@ -100,6 +107,44 @@ class FloatingWindowService : Service(), IFloatingService {
 
     override fun isShowing(): Boolean = isBallShowing
 
+    private fun startForegroundNotification() {
+        val channelId = "lingshu_floating"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "悬浮窗服务",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "显示灵枢悬浮窗"
+                setShowBadge(false)
+            }
+            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("灵枢")
+            .setContentText("AI 助手运行中")
+            .setSmallIcon(android.R.drawable.presence_online)
+            .setOngoing(true)
+            .build()
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            LingShuLog.d("FloatingWindowService", "startForeground called successfully")
+        } catch (e: Exception) {
+            LingShuLog.e("FloatingWindowService", "startForeground failed", e)
+        }
+    }
+
     private fun hasOverlayPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Settings.canDrawOverlays(this)
@@ -114,6 +159,8 @@ class FloatingWindowService : Service(), IFloatingService {
                 setViewTreeLifecycleOwner(serviceLifecycle)
                 setViewTreeSavedStateRegistryOwner(serviceLifecycle)
                 setContent {
+                    val reply by viewModel.streamingReply.collectAsState()
+                    val sending by viewModel.isSending.collectAsState()
                     FloatingBall(
                         state = viewModel.state.value,
                         size = viewModel.size.value,
@@ -203,11 +250,14 @@ class FloatingWindowService : Service(), IFloatingService {
                 setViewTreeLifecycleOwner(serviceLifecycle)
                 setViewTreeSavedStateRegistryOwner(serviceLifecycle)
                 setContent {
+                    val reply by viewModel.streamingReply.collectAsState()
+                    val sending by viewModel.isSending.collectAsState()
                     FloatingChatBubble(
+                        streamingReply = reply,
+                        isSending = sending,
                         onDismiss = { hideChatBubble() },
                         onSend = { message ->
                             viewModel.sendMessage(message)
-                            hideChatBubble()
                         }
                     )
                 }
@@ -296,6 +346,35 @@ class FloatingWindowService : Service(), IFloatingService {
                     }
                 }
                 MotionEvent.ACTION_UP -> {
+                    // Edge snapping: move to nearest horizontal edge
+                    val params = ballParams
+                    if (params != null) {
+                        val screenWidth = android.content.res.Resources.getSystem().displayMetrics.widthPixels
+                        val currentX = params.x
+                        val targetX = if (currentX + params.width / 2 < screenWidth / 2) {
+                            0
+                        } else {
+                            screenWidth - params.width
+                        }
+                        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                        val steps = 10
+                        val stepDelta = (targetX - currentX) / steps
+                        var step = 0
+                        handler.post(object : Runnable {
+                            override fun run() {
+                                step++
+                                if (step <= steps) {
+                                    params.x = currentX + stepDelta * step
+                                    try {
+                                        windowManager.updateViewLayout(floatingBallView, params)
+                                    } catch (e: Exception) {
+                                        LingShuLog.e("FloatingWindowService", "Edge snap update failed", e)
+                                    }
+                                    handler.postDelayed(this, 16)
+                                }
+                            }
+                        })
+                    }
                     if (!isDragging) {
                         view.performClick()
                     }
@@ -316,6 +395,7 @@ class FloatingWindowService : Service(), IFloatingService {
     }
 
     companion object {
+        private const val NOTIFICATION_ID = 1001
         fun start(context: Context) {
             val intent = Intent(context, FloatingWindowService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

@@ -36,7 +36,6 @@ dependencies {
     ksp("com.google.dagger:hilt-compiler:2.50")
     implementation(project(":core-common"))
     implementation(project(":core-ui"))
-    implementation(project(":feature-control"))
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

@@ -5,8 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -22,7 +22,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.material3.Scaffold
 import com.lingshu.feature.chat.presentation.ChatScreen
+import com.lingshu.feature.health.presentation.HealthScreen
 import com.lingshu.feature.guide.navigation.GuideSection
 
 @Composable
@@ -32,11 +34,15 @@ fun MainScreen(
     onNavigateToMod: () -> Unit = {},
     onNavigateToWakeWord: () -> Unit = {},
     onNavigateToCommunity: () -> Unit = {},
+    onNavigateToHealth: () -> Unit = {},
+    onNavigateToMemory: () -> Unit = {},
+    onNavigateToPersona: () -> Unit = {},
+    onNavigateToProactive: () -> Unit = {},
     onNavigateToModelSettings: () -> Unit = {}
 ) {
     val items = listOf(
         BottomNavItem.Chat,
-        BottomNavItem.Control,
+        BottomNavItem.Health,
         BottomNavItem.Settings
     )
 
@@ -55,8 +61,8 @@ fun MainScreen(
                 composable(BottomNavItem.Chat.route) {
                     ChatScreen()
                 }
-                composable(BottomNavItem.Control.route) {
-                    ControlScreen()
+                composable(BottomNavItem.Health.route) {
+                    HealthScreen(onNavigateToCommunity = onNavigateToCommunity)
                 }
                 composable(BottomNavItem.Settings.route) {
                     SettingsScreen(
@@ -65,7 +71,11 @@ fun MainScreen(
                         onNavigateToCloneVoice = onNavigateToCloneVoice,
                         onNavigateToMod = onNavigateToMod,
                         onNavigateToWakeWord = onNavigateToWakeWord,
-                        onNavigateToCommunity = onNavigateToCommunity
+                        onNavigateToCommunity = onNavigateToCommunity,
+                        onNavigateToHealth = onNavigateToHealth,
+                        onNavigateToMemory = onNavigateToMemory,
+                        onNavigateToPersona = onNavigateToPersona,
+                        onNavigateToProactive = onNavigateToProactive
                     )
                 }
             }
@@ -112,19 +122,19 @@ sealed class BottomNavItem(
 ) {
     object Chat : BottomNavItem(
         route = "main_chat",
-        label = "聊天",
+        label = "\u804A\u5929",
         icon = Icons.Default.ChatBubble
     )
 
-    object Control : BottomNavItem(
-        route = "main_control",
-        label = "控制",
-        icon = Icons.Default.TouchApp
+    object Health : BottomNavItem(
+        route = "main_health",
+        label = "\u5065\u5EB7",
+        icon = Icons.Default.Favorite
     )
 
     object Settings : BottomNavItem(
         route = "main_settings",
-        label = "设置",
+        label = "\u8BBE\u7F6E",
         icon = Icons.Default.Settings
     )
 }

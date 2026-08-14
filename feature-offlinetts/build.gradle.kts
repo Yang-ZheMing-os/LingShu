@@ -37,8 +37,10 @@ dependencies {
     implementation(project(":core-common"))
     implementation(project(":core-ui"))
 
-    // ★ OnnxRuntime Android（真实依赖）
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
+    // ★ Sherpa-ONNX（本地 TTS 引擎，使用 XDcobra Maven 仓库发布版）
+    // sherpa-onnx AAR 下载阻塞，暂时注释，运行时走 ChatTTS/EdgeTTS fallback
+    // compileOnly("com.xdcobra.sherpa:sherpa-onnx:1.12.24")
+    implementation("com.xdcobra.sherpa:onnxruntime:1.24.2-qnn2.43.1.260218@aar")
 
     // JSON 解析（tokenizer.json）
     implementation("org.json:json:20240303")

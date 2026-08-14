@@ -3,16 +3,23 @@ package com.lingshu.feature.control.data
 import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.feature.control.domain.Command
 import com.lingshu.feature.control.domain.ICommandParser
+import com.lingshu.feature.control.domain.ISystemControl
 import com.lingshu.feature.control.domain.SystemAction
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class CommandParserImpl @Inject constructor() : ICommandParser {
+class CommandParserImpl @Inject constructor(
+    private val systemControl: ISystemControl
+) : ICommandParser {
 
     override fun parse(userInput: String): Command {
         val input = userInput.trim().lowercase()
         LingShuLog.d("CommandParser", "解析指令: $userInput")
+
+        // 预解析导航 / App 内操作（需提取参数），命中则直接返回
+        val navigate = parseNavigate(input)
+        val appAction = parseAppAction(input)
 
         return when {
             isScreenshotCommand(input) -> Command.Screenshot
@@ -36,6 +43,10 @@ class CommandParserImpl @Inject constructor() : ICommandParser {
 
             isAutoRotateOnCommand(input) -> Command.SystemControl(SystemAction.AUTO_ROTATE_ON)
             isAutoRotateOffCommand(input) -> Command.SystemControl(SystemAction.AUTO_ROTATE_OFF)
+
+            navigate != null -> navigate
+            isTakeoutCommand(input) -> Command.OpenTakeout
+            appAction != null -> appAction
 
             else -> parseAppCommand(input) ?: Command.Unknown(userInput)
         }
@@ -125,13 +136,70 @@ class CommandParserImpl @Inject constructor() : ICommandParser {
                (input.contains("自动旋转") || input.contains("旋转"))
     }
 
-    private fun parseAppCommand(input: String): Command? {
-        val openPatterns = listOf("打开", "启动", "开启", "运行", "open", "launch", "start")
-        val closePatterns = listOf("关闭", "退出", "关掉", "close", "exit", "quit")
+    /**
+     * 解析导航指令："导航到XXX" / "导航至XXX" / "导航去XXX" / "前往XXX" / "去XXX" / "导航XXX"。
+     * 前缀按长度从长到短匹配，避免"导航"吃掉"导航到"。返回 null 表示未命中。
+     */
+    private fun parseNavigate(input: String): Command.Navigate? {
+        val prefixes = listOf("导航到", "导航至", "导航去", "前往", "导航", "去")
+        for (prefix in prefixes) {
+            if (input.startsWith(prefix)) {
+                val dest = input.removePrefix(prefix).trim()
+                if (dest.isNotEmpty()) {
+                    return Command.Navigate(dest)
+                }
+            }
+        }
+        return null
+    }
 
-        for (pattern in openPatterns) {
-            if (input.startsWith(pattern) || input.contains(pattern)) {
-                val appName = input.replace(pattern, "").trim()
+    /** 解析外卖指令："点外卖" / "叫外卖" / "订外卖" / "打开外卖" / "开外卖" */
+    private fun isTakeoutCommand(input: String): Boolean {
+        return input.contains("外卖") && (
+            input.contains("点") || input.contains("叫") || input.contains("订") ||
+                input.contains("打开") || input.contains("开启") || input.contains("开"))
+    }
+
+    /**
+     * 解析 App 内操作指令，目前支持发送消息：
+     * "在微信里发消息给XXX" / "用微信发消息给XXX" / "在微信给XXX发消息"。
+     * 返回 null 表示未命中。
+     */
+    private fun parseAppAction(input: String): Command.AppAction? {
+        val patterns = listOf(
+            Regex("在(.+?)(?:里|中|上)发消息给(.+)"),
+            Regex("用(.+?)发消息给(.+)"),
+            Regex("在(.+?)给(.+?)发消息")
+        )
+        for (pattern in patterns) {
+            val m = pattern.find(input) ?: continue
+            val appName = m.groupValues[1].trim()
+            val contact = m.groupValues[2].trim()
+            if (appName.isNotEmpty() && contact.isNotEmpty()) {
+                return Command.AppAction(
+                    appName = appName,
+                    action = "send_message",
+                    params = mapOf("contact" to contact)
+                )
+            }
+        }
+        return null
+    }
+
+    private fun parseAppCommand(input: String): Command? {
+        // 去掉前导口语修饰词（帮我/请/我想/给我 等），让"帮我打开设置"也能识别
+        val prefixRegex = Regex("^(帮我|麻烦你|麻烦|请你|请|我想|我要|给我|能不能|可以|可以帮我|我要你|能不能帮我|你帮我|你给我)")
+        val cleaned = input.replace(prefixRegex, "").trim()
+
+        val openActions = listOf("打开", "启动", "开启", "运行")
+        val closeActions = listOf("关闭", "退出", "关掉")
+
+        // 匹配"动作+应用名"，取动作词后的内容作为应用名，并清理尾部语气词
+        val tailRegex = Regex("(一下|吧|了|可以吗|好吗|呗|啦|啊|哦|呀)\$")
+        for (action in openActions) {
+            if (cleaned.contains(action)) {
+                val after = cleaned.substringAfter(action).trim()
+                val appName = after.replace(tailRegex, "").trim()
                 if (appName.isNotEmpty()) {
                     val packageName = getPackageNameByAppName(appName)
                     return Command.OpenApp(appName = appName, packageName = packageName)
@@ -139,9 +207,32 @@ class CommandParserImpl @Inject constructor() : ICommandParser {
             }
         }
 
-        for (pattern in closePatterns) {
-            if (input.startsWith(pattern) || input.contains(pattern)) {
-                val appName = input.replace(pattern, "").trim()
+        for (action in closeActions) {
+            if (cleaned.contains(action)) {
+                val after = cleaned.substringAfter(action).trim()
+                val appName = after.replace(tailRegex, "").trim()
+                if (appName.isNotEmpty()) {
+                    return Command.CloseApp(appName = appName)
+                }
+            }
+        }
+
+        // 英文动作
+        val enOpen = listOf("open", "launch", "start")
+        val enClose = listOf("close", "exit", "quit")
+        for (action in enOpen) {
+            if (cleaned.startsWith(action) || cleaned.contains(" " + action + " ")) {
+                val appName = cleaned.substringAfter(action).trim()
+                    .replace(Regex("(please|plz)"), "").trim()
+                if (appName.isNotEmpty()) {
+                    val packageName = getPackageNameByAppName(appName)
+                    return Command.OpenApp(appName = appName, packageName = packageName)
+                }
+            }
+        }
+        for (action in enClose) {
+            if (cleaned.startsWith(action) || cleaned.contains(" " + action + " ")) {
+                val appName = cleaned.substringAfter(action).trim()
                 if (appName.isNotEmpty()) {
                     return Command.CloseApp(appName = appName)
                 }
@@ -151,19 +242,8 @@ class CommandParserImpl @Inject constructor() : ICommandParser {
         return null
     }
 
-    private fun getPackageNameByAppName(appName: String): String {
-        return when (appName.lowercase()) {
-            "微信" -> "com.tencent.mm"
-            "抖音" -> "com.ss.android.ugc.aweme"
-            "设置" -> "com.android.settings"
-            "相机" -> "com.android.camera"
-            "相册" -> "com.android.gallery"
-            "音乐" -> "com.android.music"
-            "浏览器" -> "com.android.browser"
-            "日历" -> "com.android.calendar"
-            "时钟" -> "com.android.deskclock"
-            "计算器" -> "com.android.calculator2"
-            else -> ""
-        }
-    }
+
+    /** 包名解析委托给 [ISystemControl]，统一维护映射表 */
+    private fun getPackageNameByAppName(appName: String): String =
+        systemControl.getPackageNameByAppName(appName)
 }

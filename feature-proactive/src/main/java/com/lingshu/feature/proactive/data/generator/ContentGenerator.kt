@@ -47,6 +47,16 @@ class ContentGenerator {
                 content = "今天降水概率较高，出门记得带伞哦！",
                 actionText = "知道啦"
             )
+            TriggerType.MEMORY -> NotificationContent(
+                title = "Remember this day",
+                content = "Today is a special day. Want to talk about it?",
+                actionText = "Sure"
+            )
+            TriggerType.RANDOM -> NotificationContent(
+                title = "Just checking in",
+                content = "Hi! Just wanted to say hello. How are you doing?",
+                actionText = "I'm good"
+            )
         }
     }
 }

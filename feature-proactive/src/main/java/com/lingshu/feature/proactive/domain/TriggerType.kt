@@ -7,5 +7,7 @@ enum class TriggerType {
     DARK_WALKING,
     HEART_RATE,
     STRESS,
-    RAINY_DAY
+    RAINY_DAY,
+    MEMORY,
+    RANDOM
 }

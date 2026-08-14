@@ -45,6 +45,10 @@ class ChatViewModel @Inject constructor(
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
 
+    // 流式输出中的 AI 消息（逐 token 更新），null 表示不在流式生成中
+    private val _streamingMessage = MutableStateFlow<Message?>(null)
+    val streamingMessage: StateFlow<Message?> = _streamingMessage.asStateFlow()
+
     init {
         loadMessages()
     }
@@ -78,40 +82,41 @@ class ChatViewModel @Inject constructor(
 
             LingShuLog.i(
                 "ChatViewModel",
-                "$stepTag ======== 用户手动发送消息（通过UI） ========"
+                "$stepTag ======== 用户发送消息（流式） ========"
             )
             LingShuLog.v(
                 "ChatViewModel",
                 "$stepTag 消息内容: ${text.take(80)}"
             )
 
-            LingShuLog.d(
-                "ChatViewModel",
-                "$stepTag [step-1] emit UserMessageSent 事件到全局事件总线"
-            )
             eventBus.emit(
                 AppEvent.UserMessageSent(
                     content = text,
                     traceId = traceId
                 )
             )
-
-            LingShuLog.d(
-                "ChatViewModel",
-                "$stepTag [step-2] emit AiReplyStarted 事件，标记 AI 开始思考"
-            )
             eventBus.emit(AppEvent.AiReplyStarted(traceId = traceId))
 
-            when (val result = chatRepository.sendMessage(text)) {
+            // 初始化流式消息（空内容，UI 显示"思考中"动画）
+            val streaming = StringBuilder()
+            _streamingMessage.value = Message(content = "", isUser = false)
+
+            when (val result = chatRepository.sendMessageStream(text) { token ->
+                streaming.append(token)
+                _streamingMessage.value = _streamingMessage.value?.copy(
+                    content = streaming.toString()
+                )
+            }) {
                 is Result.Success -> {
                     _sendState.value = UiState.Success(result.data)
                     LingShuLog.i(
                         "ChatViewModel",
-                        "$stepTag [step-3] 对话成功，emit AiReplyFinished，reply=${result.data.content.take(80)}"
+                        "$stepTag 流式对话成功，reply=${result.data.content.take(80)}"
                     )
                     eventBus.emit(
                         AppEvent.AiReplyFinished(
                             reply = result.data.content,
+                            userInput = text,
                             traceId = traceId
                         )
                     )
@@ -126,7 +131,7 @@ class ChatViewModel @Inject constructor(
                     )
                     LingShuLog.e(
                         "ChatViewModel",
-                        "$stepTag [step-3] 对话失败，emit AiReplyError: code=${result.code}",
+                        "$stepTag 流式对话失败: code=${result.code}",
                         result.cause
                     )
                     eventBus.emit(
@@ -139,9 +144,12 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
+            // 流式结束：清空临时消息，落库的完整消息会通过 messagesState 自动推送
+            _streamingMessage.value = null
+
             LingShuLog.i(
                 "ChatViewModel",
-                "$stepTag ======== UI 发送消息流程结束 ========"
+                "$stepTag ======== 流式发送流程结束 ========"
             )
         }
     }

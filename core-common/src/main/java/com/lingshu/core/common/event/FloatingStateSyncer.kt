@@ -1,7 +1,8 @@
-package com.lingshu.core.common.event
+﻿package com.lingshu.core.common.event
 
 import com.lingshu.core.common.di.MainDispatcher
 import com.lingshu.core.common.log.LingShuLog
+import com.lingshu.core.common.event.StartableBridge
 import com.lingshu.core.common.event.FloatingState
 import com.lingshu.core.common.event.IFloatingService
 import kotlinx.coroutines.CoroutineDispatcher
@@ -18,13 +19,13 @@ class FloatingStateSyncer @Inject constructor(
     private val bus: IAppEventBus,
     private val floatingService: IFloatingService,
     @MainDispatcher private val mainDispatcher: CoroutineDispatcher
-) {
+) : StartableBridge {
 
     private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
     private var collectJob: Job? = null
     private var currentState: FloatingState = FloatingState.IDLE
 
-    fun start() {
+    override fun start() {
         if (collectJob?.isActive == true) {
             LingShuLog.w("FloatingStateSyncer", "Syncer 已在运行，忽略重复 start")
             return
@@ -37,7 +38,7 @@ class FloatingStateSyncer @Inject constructor(
         }
     }
 
-    fun stop() {
+    override fun stop() {
         LingShuLog.d("FloatingStateSyncer", "停止 FloatingState 同步器")
         collectJob?.cancel()
         collectJob = null

@@ -1,5 +1,6 @@
 package com.lingshu.feature.clonevoice.presentation
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lingshu.core.common.error.Result
@@ -7,15 +8,18 @@ import com.lingshu.core.common.state.UiState
 import com.lingshu.feature.clonevoice.domain.ICloneVoiceService
 import com.lingshu.feature.clonevoice.domain.Voice
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
+import kotlin.math.sin
 
 @HiltViewModel
 class CloneVoiceViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val cloneVoiceService: ICloneVoiceService
 ) : ViewModel() {
 
@@ -41,6 +45,7 @@ class CloneVoiceViewModel @Inject constructor(
     val previewState: StateFlow<UiState<Unit>> = _previewState.asStateFlow()
 
     private var recordingStartTime = 0L
+    private var currentRecordingFile: File? = null
 
     init {
         loadVoices()
@@ -51,24 +56,70 @@ class CloneVoiceViewModel @Inject constructor(
         _currentVoice.value = cloneVoiceService.getCurrentVoice()
     }
 
+    /**
+     * 开始录音：在 cacheDir/recordings 下创建录音输出文件，并调用服务启动 MediaRecorder。
+     * 立即进入录音态以避免重复点击，失败时回退并上报错误。
+     */
     fun startRecording() {
-        _isRecording.value = true
-        _recordingTime.value = 0L
-        _waveformAmplitudes.value = emptyList()
-        recordingStartTime = System.currentTimeMillis()
+        viewModelScope.launch {
+            _cloneState.value = UiState.Idle
+            recordingStartTime = System.currentTimeMillis()
+            _recordingTime.value = 0L
+            _waveformAmplitudes.value = emptyList()
+            _isRecording.value = true
+
+            val recordingsDir = File(context.cacheDir, "recordings").apply { mkdirs() }
+            val file = File(recordingsDir, "recording_${System.currentTimeMillis()}.amr")
+            currentRecordingFile = file
+
+            val result = cloneVoiceService.startRecording(file)
+            when (result) {
+                is Result.Success -> {
+                    // 录音已真实启动，保持 isRecording=true
+                    recordingStartTime = System.currentTimeMillis()
+                }
+                is Result.Error -> {
+                    _isRecording.value = false
+                    currentRecordingFile = null
+                    _cloneState.value = UiState.Error(result.code, result.message)
+                }
+            }
+        }
     }
 
-    fun stopRecording(): File? {
-        _isRecording.value = false
-        return null
+    /**
+     * 停止录音：调用服务停止 MediaRecorder 并返回录音文件。
+     * 由于 stopRecording 需要返回 File 给 UI，采用回调方式通知；
+     * 录音完成后自动触发 cloneVoice（在 Screen 的回调中完成）。
+     */
+    fun stopRecording(onComplete: (File?) -> Unit) {
+        viewModelScope.launch {
+            val result = cloneVoiceService.stopRecording()
+            _isRecording.value = false
+            val file = when (result) {
+                is Result.Success -> result.data
+                is Result.Error -> {
+                    _cloneState.value = UiState.Error(result.code, result.message)
+                    null
+                }
+            }
+            currentRecordingFile = null
+            onComplete(file)
+        }
     }
 
+    /**
+     * 更新录音时长与波形。使用基于时间的稳定正弦波形，替代 Math.random() 假数据。
+     */
     fun updateRecordingTime() {
         if (_isRecording.value) {
-            _recordingTime.value = System.currentTimeMillis() - recordingStartTime
-            val newAmplitude = (Math.random().toFloat() * 0.8f + 0.2f)
+            val elapsed = System.currentTimeMillis() - recordingStartTime
+            _recordingTime.value = elapsed
+            // 基于时间的稳定正弦波形，避免随机抖动
+            val t = elapsed / 1000f
+            val amplitude = (0.5f + 0.4f * sin(t * 3.5).toFloat()).coerceIn(0.15f, 1f)
             val currentList = _waveformAmplitudes.value.toMutableList()
-            currentList.add(newAmplitude)
+            currentList.add(amplitude)
             if (currentList.size > 100) {
                 currentList.removeAt(0)
             }
@@ -83,7 +134,10 @@ class CloneVoiceViewModel @Inject constructor(
             when (result) {
                 is Result.Success -> {
                     _cloneState.value = UiState.Success(result.data)
+                    // 刷新列表，并自动选中新创建的声音
                     loadVoices()
+                    val newId = result.data
+                    applyVoice(newId)
                 }
                 is Result.Error -> {
                     _cloneState.value = UiState.Error(result.code, result.message)
@@ -94,7 +148,18 @@ class CloneVoiceViewModel @Inject constructor(
 
     fun setCurrentVoice(voiceId: String) {
         viewModelScope.launch {
-            val result = cloneVoiceService.setCurrentVoice(voiceId)
+            // 选中即应用：将音色配置写入 TTS 引擎
+            applyVoice(voiceId)
+        }
+    }
+
+    /**
+     * 应用指定音色到 TTS 引擎并切换当前音色。
+     * 成功后刷新当前音色状态。
+     */
+    fun applyVoice(voiceId: String) {
+        viewModelScope.launch {
+            val result = cloneVoiceService.applyVoice(voiceId)
             if (result.isSuccess) {
                 _currentVoice.value = cloneVoiceService.getCurrentVoice()
             }
@@ -113,6 +178,8 @@ class CloneVoiceViewModel @Inject constructor(
     fun previewVoice(voiceId: String, text: String) {
         viewModelScope.launch {
             _previewState.value = UiState.Loading
+            // 试听前先应用该音色配置，确保使用当前选中音色合成
+            cloneVoiceService.applyVoice(voiceId)
             val result = cloneVoiceService.previewVoice(voiceId, text)
             when (result) {
                 is Result.Success -> {

@@ -54,6 +54,8 @@ sealed class AppEvent(open val traceId: String) {
 
     data class AiReplyFinished(
         val reply: String,
+        val userInput: String = "",
+        val fromVoiceSession: Boolean = false,
         override val traceId: String
     ) : AppEvent(traceId)
 

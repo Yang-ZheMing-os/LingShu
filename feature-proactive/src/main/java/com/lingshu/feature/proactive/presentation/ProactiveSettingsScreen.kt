@@ -36,6 +36,7 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lingshu.feature.proactive.domain.QuietHours
 import com.lingshu.feature.proactive.domain.TriggerType
 import com.lingshu.core.ui.component.GlassCard
 
@@ -233,6 +234,17 @@ fun ProactiveSettingsScreen(
             }
         )
     }
+
+    if (showQuietHoursDialog) {
+        QuietHoursDialog(
+            currentQuietHours = config.quietHours,
+            onDismiss = { showQuietHoursDialog = false },
+            onConfirm = { quietHours ->
+                viewModel.updateQuietHours(quietHours)
+                showQuietHoursDialog = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -359,6 +371,87 @@ fun NumberInputDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("取消")
+            }
+        }
+    )
+}
+
+
+@Composable
+fun QuietHoursDialog(
+    currentQuietHours: QuietHours,
+    onDismiss: () -> Unit,
+    onConfirm: (QuietHours) -> Unit
+) {
+    var startHourText by remember { mutableStateOf(currentQuietHours.startHour.toString()) }
+    var startMinuteText by remember { mutableStateOf(currentQuietHours.startMinute.toString()) }
+    var endHourText by remember { mutableStateOf(currentQuietHours.endHour.toString()) }
+    var endMinuteText by remember { mutableStateOf(currentQuietHours.endMinute.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Quiet Hours") },
+        text = {
+            Column {
+                Text("Start Time")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = startHourText,
+                        onValueChange = { startHourText = it.filter { c -> c.isDigit() }.take(2) },
+                        label = { Text("Hour") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = startMinuteText,
+                        onValueChange = { startMinuteText = it.filter { c -> c.isDigit() }.take(2) },
+                        label = { Text("Minute") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("End Time")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = endHourText,
+                        onValueChange = { endHourText = it.filter { c -> c.isDigit() }.take(2) },
+                        label = { Text("Hour") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = endMinuteText,
+                        onValueChange = { endMinuteText = it.filter { c -> c.isDigit() }.take(2) },
+                        label = { Text("Minute") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val startHour = startHourText.toIntOrNull()?.coerceIn(0, 23) ?: 0
+                    val startMinute = startMinuteText.toIntOrNull()?.coerceIn(0, 59) ?: 0
+                    val endHour = endHourText.toIntOrNull()?.coerceIn(0, 23) ?: 0
+                    val endMinute = endMinuteText.toIntOrNull()?.coerceIn(0, 59) ?: 0
+                    onConfirm(QuietHours(startHour, startMinute, endHour, endMinute))
+                }
+            ) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
             }
         }
     )

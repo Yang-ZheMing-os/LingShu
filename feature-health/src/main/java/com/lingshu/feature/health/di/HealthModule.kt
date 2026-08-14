@@ -1,14 +1,12 @@
 package com.lingshu.feature.health.di
 
+import android.content.Context
 import com.lingshu.feature.health.data.HealthServiceImpl
-import com.lingshu.feature.health.data.IHealthConnectService
-import com.lingshu.feature.health.data.ISensorService
-import com.lingshu.feature.health.data.MockHealthConnectService
-import com.lingshu.feature.health.data.MockSensorService
 import com.lingshu.feature.health.domain.IHealthService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -18,22 +16,9 @@ object HealthModule {
 
     @Provides
     @Singleton
-    fun provideHealthConnectService(): IHealthConnectService {
-        return MockHealthConnectService()
-    }
-
-    @Provides
-    @Singleton
-    fun provideSensorService(): ISensorService {
-        return MockSensorService()
-    }
-
-    @Provides
-    @Singleton
     fun provideHealthService(
-        healthConnectService: IHealthConnectService,
-        sensorService: ISensorService
+        @ApplicationContext context: Context
     ): IHealthService {
-        return HealthServiceImpl(healthConnectService, sensorService)
+        return HealthServiceImpl(context)
     }
 }

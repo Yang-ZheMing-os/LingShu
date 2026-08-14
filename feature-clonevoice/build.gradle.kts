@@ -38,6 +38,9 @@ dependencies {
     implementation(project(":core-ui"))
     implementation(project(":core-data"))
 
+    // 离线 TTS：用于声音预览（OfflineTtsRouter 自带 Android 系统 TTS 兜底）
+    implementation(project(":feature-offlinetts"))
+
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")

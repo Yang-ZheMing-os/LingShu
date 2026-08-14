@@ -65,9 +65,19 @@ class TriggerEvaluator(private val context: Context) {
                 TriggerType.HEART_RATE -> checkHeartRate()
                 TriggerType.STRESS -> checkStress()
                 TriggerType.RAINY_DAY -> checkRainyDay()
+                TriggerType.MEMORY -> checkMemoryTrigger()
+                TriggerType.RANDOM -> checkRandomTrigger()
             }
 
             if (triggered) {
+                // Random probability filter for non-urgent triggers (20-30% filter rate)
+                val nonUrgentTypes = setOf(TriggerType.SEDENTARY, TriggerType.DARK_WALKING, TriggerType.RAINY_DAY, TriggerType.RANDOM)
+                if (triggerType in nonUrgentTypes) {
+                    if (kotlin.random.Random.nextFloat() > 0.25f) {
+                        LingShuLog.d("Proactive", "Triggered but filtered by probability: $triggerType")
+                        continue
+                    }
+                }
                 LingShuLog.d("Proactive", "Triggered: $triggerType")
                 return triggerType
             }
@@ -157,6 +167,17 @@ class TriggerEvaluator(private val context: Context) {
 
     private fun checkRainyDay(): Boolean {
         return false
+    }
+
+    private fun checkMemoryTrigger(): Boolean {
+        // Memory trigger is handled externally by ProactiveServiceImpl
+        // which checks birthdays, anniversaries, and negative emotion follow-ups
+        return false
+    }
+
+    private fun checkRandomTrigger(): Boolean {
+        // Random care trigger - 5% base probability
+        return kotlin.random.Random.nextFloat() < 0.05f
     }
 
     private fun isScreenOn(): Boolean {

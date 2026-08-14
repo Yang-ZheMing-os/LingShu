@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,15 +32,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.lingshu.core.common.state.UiState
 import com.lingshu.core.ui.component.GlassCard
 import com.lingshu.feature.health.domain.SleepData
@@ -47,16 +53,33 @@ import com.lingshu.feature.health.domain.SleepData
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HealthScreen(
+    onNavigateToCommunity: () -> Unit = {},
     viewModel: HealthViewModel = hiltViewModel()
 ) {
     val hasPermissions by viewModel.hasPermissions.collectAsState()
+    val isDeviceSupported by viewModel.isDeviceSupported.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+
+    // 界面回到前台时重新检测真实设备/权限状态（用户从系统设置授权后返回可自动刷新）
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.onResumeCheck()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("健康数据") },
                 actions = {
+                    IconButton(onClick = onNavigateToCommunity) {
+                        Icon(Icons.Default.Notifications, contentDescription = "社区")
+                    }
                     if (hasPermissions) {
                         IconButton(onClick = { viewModel.loadAllData() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "刷新")
@@ -72,17 +95,57 @@ fun HealthScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            if (!hasPermissions) {
-                PermissionRequestScreen(
-                    onGrantPermissions = { viewModel.requestPermissions() }
-                )
-            } else {
-                HealthDataOverview(
-                    viewModel = viewModel,
-                    isRefreshing = isRefreshing
-                )
+            when {
+                // 无可检测传感器：显示“未连接可检测设备”
+                !isDeviceSupported -> {
+                    DeviceNotSupportedScreen()
+                }
+                // 有传感器但未授权：显示“授予权限”
+                !hasPermissions -> {
+                    PermissionRequestScreen(
+                        onGrantPermissions = { viewModel.requestPermissions() }
+                    )
+                }
+                // 已授权：展示真实健康数据概览
+                else -> {
+                    HealthDataOverview(
+                        viewModel = viewModel,
+                        isRefreshing = isRefreshing
+                    )
+                }
             }
         }
+    }
+}
+
+/** 无可检测设备时的提示界面 */
+@Composable
+private fun DeviceNotSupportedScreen() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.Info,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "未连接可检测设备",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "当前设备未检测到步数或心率等健康传感器，无法展示真实健康数据",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        )
     }
 }
 
@@ -109,9 +172,11 @@ private fun PermissionRequestScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "需要健康数据权限来展示你的健康概览",
+            text = "需要身体传感器权限来读取真实的步数、心率等健康数据",
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp)
         )
         Spacer(modifier = Modifier.height(24.dp))
         Button(onClick = onGrantPermissions) {
@@ -329,7 +394,16 @@ private fun <T> HealthMetricCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                else -> {
+                is UiState.Error -> {
+                    // 真实错误信息：如“该设备不支持…”“暂无数据”“权限未授予”
+                    Text(
+                        text = state.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                is UiState.Idle -> {
                     Text(
                         text = "--",
                         style = MaterialTheme.typography.headlineMedium,
@@ -412,7 +486,21 @@ private fun SleepCard(
                         )
                     }
                 }
-                else -> {
+                is UiState.Error -> {
+                    // 真实提示：该设备不支持睡眠监测
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = state.message,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                is UiState.Idle -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

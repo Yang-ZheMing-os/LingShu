@@ -24,7 +24,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -71,6 +72,8 @@ dependencies {
     implementation(project(":feature-clonevoice"))
     implementation(project(":feature-floating"))
     implementation(project(":feature-update"))
+    implementation(project(":feature-offlinestt"))
+    implementation(project(":feature-offlinetts"))
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

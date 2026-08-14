@@ -34,6 +34,29 @@ class UpdateCheckWorker @AssistedInject constructor(
                     val updateInfo = result.data
                     LingShuLog.i(TAG, "发现新版本: ${updateInfo.version}")
                     if (showNotification) {
+                        try {
+                            val notificationManager = androidx.core.app.NotificationManagerCompat.from(applicationContext)
+                            if (notificationManager.areNotificationsEnabled()) {
+                                val channelId = "lingshu_update"
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                    val channel = android.app.NotificationChannel(
+                                        channelId,
+                                        "App Updates",
+                                        android.app.NotificationManager.IMPORTANCE_DEFAULT
+                                    )
+                                    notificationManager.createNotificationChannel(channel)
+                                }
+                                val notification = androidx.core.app.NotificationCompat.Builder(applicationContext, channelId)
+                                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                                    .setContentTitle("New version available")
+                                    .setContentText("Version " + updateInfo.version + " is available. Tap to update.")
+                                    .setAutoCancel(true)
+                                    .build()
+                                notificationManager.notify(1001, notification)
+                            }
+                        } catch (e: Exception) {
+                            LingShuLog.e(TAG, "Failed to send update notification", e)
+                        }
                     }
                     Result.success()
                 }

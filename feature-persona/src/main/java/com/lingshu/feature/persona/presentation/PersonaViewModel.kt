@@ -62,4 +62,27 @@ class PersonaViewModel @Inject constructor(
     fun clearGeneratedPrompt() {
         _generatedPrompt.value = ""
     }
+
+    private val _exportedJson = MutableStateFlow<String?>(null)
+    val exportedJson: StateFlow<String?> = _exportedJson.asStateFlow()
+
+    private val _importResult = MutableStateFlow<Boolean?>(null)
+    val importResult: StateFlow<Boolean?> = _importResult.asStateFlow()
+
+    fun exportPersona() {
+        viewModelScope.launch {
+            _exportedJson.value = personaService.exportPersona()
+        }
+    }
+
+    fun importPersona(json: String) {
+        viewModelScope.launch {
+            _importResult.value = personaService.importPersona(json)
+        }
+    }
+
+    fun clearExportImportState() {
+        _exportedJson.value = null
+        _importResult.value = null
+    }
 }

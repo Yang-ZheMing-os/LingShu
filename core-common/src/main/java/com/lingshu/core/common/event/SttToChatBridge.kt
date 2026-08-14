@@ -18,12 +18,12 @@ class SttToChatBridge @Inject constructor(
     private val bus: IAppEventBus,
     private val chatRepository: IChatRepository,
     @IoDispatcher private val handler: CoroutineDispatcher
-) {
+) : StartableBridge {
 
     private val scope = CoroutineScope(SupervisorJob() + handler)
     private var collectJob: Job? = null
 
-    fun start() {
+    override fun start() {
         if (collectJob?.isActive == true) {
             LingShuLog.w("SttToChatBridge", "Bridge 已在运行，忽略重复 start")
             return
@@ -36,7 +36,7 @@ class SttToChatBridge @Inject constructor(
         }
     }
 
-    fun stop() {
+    override fun stop() {
         LingShuLog.d("SttToChatBridge", "停止 STT→Chat 桥梁")
         collectJob?.cancel()
         collectJob = null
@@ -108,6 +108,8 @@ class SttToChatBridge @Inject constructor(
                     bus.emit(
                         AppEvent.AiReplyFinished(
                             reply = replyText,
+                            userInput = event.text,
+                            fromVoiceSession = true,
                             traceId = traceId
                         )
                     )

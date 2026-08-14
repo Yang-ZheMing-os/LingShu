@@ -53,9 +53,11 @@ class EdgeTtsEngine @Inject constructor(
         private const val EDGE_WS_URL =
             "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1"
         private const val TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4"
+        private const val CHROMIUM_MAJOR = "143"
+        private const val CHROMIUM_FULL_VERSION = "143.0.3650.75"
         private const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
+                    "(KHTML, like Gecko) Chrome/$CHROMIUM_MAJOR.0.0.0 Safari/537.36 Edg/$CHROMIUM_MAJOR.0.0.0"
 
         val VOICE_MAP = mapOf(
             "zh-CN-XiaoxiaoNeural"     to "zh-CN",
@@ -308,12 +310,8 @@ class EdgeTtsEngine @Inject constructor(
         val collected = mutableListOf<ByteArray>()
         var error: Throwable? = null
 
-        val connId = UUID.randomUUID().toString()
-        val url = "$EDGE_WS_URL?TrustedClientToken=$TRUSTED_CLIENT_TOKEN&ConnectionId=$connId"
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", USER_AGENT)
-            .build()
+        val connId = UUID.randomUUID().toString().replace("-", "")
+        val request = buildEdgeWsRequest(connId)
 
         val ssml = buildSsml(text, voice, locale, speed)
 
@@ -361,6 +359,15 @@ class EdgeTtsEngine @Inject constructor(
             }
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                 LingShuLog.e(moduleTag, "[$traceId] Edge WS failure", t)
+                if (response != null) {
+                    LingShuLog.e(moduleTag, "[$traceId] Edge WS failure response code=${response.code} message=${response.message}")
+                    val respHeaders = response.headers.names().joinToString(", ") { "$it=${response.headers(it)}" }
+                    LingShuLog.e(moduleTag, "[$traceId] Edge WS response headers: $respHeaders")
+                    try {
+                        val body = response.body?.string()
+                        if (body != null) LingShuLog.e(moduleTag, "[$traceId] Edge WS response body: ${body.take(500)}")
+                    } catch (e: Exception) { }
+                }
                 error = t
                 latch.countDown()
             }
@@ -387,9 +394,8 @@ class EdgeTtsEngine @Inject constructor(
         val latch = CountDownLatch(1)
         var error: Throwable? = null
 
-        val connId = UUID.randomUUID().toString()
-        val url = "$EDGE_WS_URL?TrustedClientToken=$TRUSTED_CLIENT_TOKEN&ConnectionId=$connId"
-        val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+        val connId = UUID.randomUUID().toString().replace("-", "")
+        val req = buildEdgeWsRequest(connId)
         val ssml = buildSsml(text, voice, locale, currentConfig?.speed ?: 1f)
         val format = "riff-${sampleRate}hz-16bit-mono-pcm"
 
@@ -516,5 +522,62 @@ class EdgeTtsEngine @Inject constructor(
         val df = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
         df.timeZone = java.util.TimeZone.getTimeZone("UTC")
         return df.format(java.util.Date())
+    }
+
+    /**
+     * Generate Sec-MS-GEC auth token required by Microsoft EdgeTTS.
+     * Algorithm (from rany2/edge-tts):
+     *   1. unixSeconds = now / 1000
+     *   2. winTicks = unixSeconds + 11644473600 (Windows epoch offset: 1601-01-01 to 1970-01-01)
+     *   3. winTicks -= winTicks % 300 (round down to 5-minute window)
+     *   4. winTicks *= 10000000 (convert seconds to 100-nanosecond intervals = Windows file time)
+     *   5. token = SHA256( TrustedClientToken + str(winTicks) ), uppercase hex
+     * Microsoft enforces this header since 2024; missing/wrong it returns 403 Forbidden.
+     */
+    private fun generateSecMsGec(): String {
+        val unixSec = System.currentTimeMillis() / 1000
+        val winEpochOffset = 11644473600L
+        var winTicks = unixSec + winEpochOffset
+        winTicks -= winTicks % 300
+        winTicks *= 10000000L
+        val strToHash = "$TRUSTED_CLIENT_TOKEN$winTicks"
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        val hashBytes = md.digest(strToHash.toByteArray(Charsets.US_ASCII))
+        return hashBytes.joinToString("") { "%02X".format(it) }
+    }
+
+    /**
+     * Build WebSocket Request with auth headers for synthesize / synthesizeStream.
+     * Includes Sec-MS-GEC token, Chrome version, Origin and muid cookie.
+     */
+    private fun buildEdgeWsRequest(connId: String): Request {
+        val url = "$EDGE_WS_URL?TrustedClientToken=$TRUSTED_CLIENT_TOKEN&ConnectionId=$connId"
+        val muid = generateMuid()
+        val gec = generateSecMsGec()
+        LingShuLog.d(moduleTag, "buildEdgeWsRequest | Sec-MS-GEC=$gec | Sec-MS-GEC-Version=1-$CHROMIUM_FULL_VERSION | muid=$muid")
+        return Request.Builder()
+            .url(url)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept-Encoding", "gzip, deflate, br, zstd")
+            .header("Accept-Language", "en-US,en;q=0.9")
+            .header("Pragma", "no-cache")
+            .header("Cache-Control", "no-cache")
+            .header("Origin", "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold")
+            .header("Sec-MS-GEC", gec)
+            .header("Sec-MS-GEC-Version", "1-$CHROMIUM_FULL_VERSION")
+            .header("Cookie", "muid=$muid")
+            .build()
+    }
+
+    /**
+     * Generate a random MUID cookie value (32 uppercase hex chars, no dashes).
+     * Microsoft uses this for tracking; a random value per session is acceptable.
+     */
+    private fun generateMuid(): String {
+        val sb = StringBuilder(32)
+        val chars = "0123456789ABCDEF"
+        val rnd = java.util.Random()
+        for (i in 0 until 32) sb.append(chars[rnd.nextInt(16)])
+        return sb.toString()
     }
 }

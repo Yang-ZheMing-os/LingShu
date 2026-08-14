@@ -52,6 +52,32 @@ class PromptAssembler @Inject constructor(
         private const val RAG_SIMILARITY_THRESHOLD = 0.65f
         private const val RAG_MAX_CHUNKS = 5
         private const val HISTORY_MAX_ROUNDS = 20
+        /** \u5de5\u5177\u6e05\u5355\uff1a\u58f0\u660e LLM \u53ef\u8c03\u7528\u7684\u7cfb\u7edf\u63a7\u5236\u80fd\u529b\u53ca\u8f93\u51fa\u683c\u5f0f */
+        private val TOOL_PROMPT_SECTION = """
+
+=== \u53ef\u7528\u5de5\u5177 ===
+\u4f60\u53ef\u4ee5\u5728\u56de\u590d\u4e2d\u5d4c\u5165\u5de5\u5177\u8c03\u7528\u6807\u8bb0\u6765\u63a7\u5236\u624b\u673a\u7cfb\u7edf\u529f\u80fd\u3002\u683c\u5f0f\uff1a
+[TOOL_CALL]{"action":"<action_name>","args":{<\u53c2\u6570>}}[/TOOL_CALL]
+
+\u53ef\u7528 action\uff1a
+- set_wifi: args={"on":true/false}
+- set_bluetooth: args={"on":true/false}
+- set_flashlight: args={"on":true/false}
+- volume_up / volume_down / volume_mute / volume_50
+- brightness_up / brightness_down
+- auto_rotate_on / auto_rotate_off
+- take_screenshot
+- open_app: args={"app_name":"<\u540d\u79f0>","package_name":"<\u5305\u540d>"}
+- close_app: args={"app_name":"<\u540d\u79f0>"}
+- navigate: args={"destination":"<\u76ee\u7684\u5730\u540d\u79f0\u6216\u5730\u5740>"}
+- open_takeout: \u65e0\u53c2\u6570\uff0c\u6253\u5f00\u5916\u5356\u5e94\u7528
+
+\u89c4\u5219\uff1a
+1. \u4ec5\u5728\u7528\u6237\u660e\u786e\u8981\u6c42\u63a7\u5236\u7cfb\u7edf\u529f\u80fd\u65f6\u4f7f\u7528\u5de5\u5177\u8c03\u7528
+2. \u5de5\u5177\u8c03\u7528\u6807\u8bb0\u524d\u540e\u53ef\u4ee5\u6709\u6b63\u5e38\u6587\u5b57\u56de\u590d
+3. \u4e00\u6b21\u56de\u590d\u53ef\u5305\u542b\u591a\u4e2a\u5de5\u5177\u8c03\u7528
+4. \u5982\u679c\u7528\u6237\u8bf7\u6c42\u4e0d\u660e\u786e\uff0c\u5148\u786e\u8ba4\u540e\u518d\u8c03\u7528
+"""
     }
 
     private object LlmConfig {
@@ -66,7 +92,7 @@ class PromptAssembler @Inject constructor(
         val startTime = System.currentTimeMillis()
         val tracePrefix = if (traceId.isNotBlank()) "[$traceId] " else ""
 
-        LingShuLog.i(TAG, "${tracePrefix}开始装配Prompt, historySize=${history.size}")
+        LingShuLog.i(TAG, "${tracePrefix}\u5f00\u59cb\u88c5\u914dPrompt, historySize=${history.size}")
 
         val systemPromptBuilder = StringBuilder()
         val ragSources = mutableListOf<String>()
@@ -78,34 +104,42 @@ class PromptAssembler @Inject constructor(
         val personaPrompt = try {
             personaService.generateSystemPrompt()
         } catch (e: Exception) {
-            LingShuLog.w(TAG, "${tracePrefix}Step1 人格Prompt生成失败, 使用空值", e)
+            LingShuLog.w(TAG, "${tracePrefix}Step1 \u4eba\u683cPrompt\u751f\u6210\u5931\u8d25, \u4f7f\u7528\u7a7a\u503c", e)
             ""
         }
         systemPromptBuilder.append(personaPrompt)
         personaTokens = personaPrompt.toByteArray().size
         LingShuLog.i(
             TAG,
-            "${tracePrefix}Step1 人格系统Prompt注入完成, bytes=$personaTokens, cost=${System.currentTimeMillis() - step1Start}ms"
+            "${tracePrefix}Step1 \u4eba\u683c\u7cfb\u7edfPrompt\u6ce8\u5165\u5b8c\u6210, bytes=$personaTokens, cost=${System.currentTimeMillis() - step1Start}ms"
+        )
+
+        // Step1.5: \u6ce8\u5165\u5de5\u5177\u6e05\u5355\uff08\u8ba9 LLM \u77e5\u9053\u53ef\u8c03\u7528\u7684\u7cfb\u7edf\u63a7\u5236\u80fd\u529b\uff09
+        val step15Start = System.currentTimeMillis()
+        systemPromptBuilder.append(TOOL_PROMPT_SECTION)
+        LingShuLog.i(
+            TAG,
+            "${tracePrefix}Step1.5 \u5de5\u5177\u6e05\u5355\u6ce8\u5165\u5b8c\u6210, bytes=${TOOL_PROMPT_SECTION.toByteArray().size}, cost=${System.currentTimeMillis() - step15Start}ms"
         )
 
         val step2Start = System.currentTimeMillis()
         val memoryPrompt = try {
             memoryService.buildContextPrompt()
         } catch (e: Exception) {
-            LingShuLog.w(TAG, "${tracePrefix}Step2 长期记忆构建失败, 使用空值", e)
+            LingShuLog.w(TAG, "${tracePrefix}Step2 \u957f\u671f\u8bb0\u5fc6\u6784\u5efa\u5931\u8d25, \u4f7f\u7528\u7a7a\u503c", e)
             ""
         }
         if (memoryPrompt.isNotBlank()) {
             if (systemPromptBuilder.isNotEmpty()) {
                 systemPromptBuilder.append("\n\n")
             }
-            systemPromptBuilder.append("=== 长期记忆 ===\n")
+            systemPromptBuilder.append("=== \u957f\u671f\u8bb0\u5fc6 ===\n")
             systemPromptBuilder.append(memoryPrompt)
             memoryLines = memoryPrompt.lines().size
         }
         LingShuLog.i(
             TAG,
-            "${tracePrefix}Step2 长期记忆注入完成, lines=$memoryLines, bytes=${memoryPrompt.toByteArray().size}, cost=${System.currentTimeMillis() - step2Start}ms"
+            "${tracePrefix}Step2 \u957f\u671f\u8bb0\u5fc6\u6ce8\u5165\u5b8c\u6210, lines=$memoryLines, bytes=${memoryPrompt.toByteArray().size}, cost=${System.currentTimeMillis() - step2Start}ms"
         )
 
         val step3Start = System.currentTimeMillis()
@@ -113,12 +147,12 @@ class PromptAssembler @Inject constructor(
             when (val searchResult = ragService.search(userInput)) {
                 is Result.Success -> searchResult.data
                 is Result.Error -> {
-                    LingShuLog.w(TAG, "${tracePrefix}Step3 RAG搜索失败: ${searchResult.code}")
+                    LingShuLog.w(TAG, "${tracePrefix}Step3 RAG\u641c\u7d22\u5931\u8d25: ${searchResult.code}")
                     emptyList()
                 }
             }
         } catch (e: Exception) {
-            LingShuLog.w(TAG, "${tracePrefix}Step3 RAG搜索异常", e)
+            LingShuLog.w(TAG, "${tracePrefix}Step3 RAG\u641c\u7d22\u5f02\u5e38", e)
             emptyList()
         }
         val filteredRag = ragChunks
@@ -130,10 +164,10 @@ class PromptAssembler @Inject constructor(
             if (systemPromptBuilder.isNotEmpty()) {
                 systemPromptBuilder.append("\n\n")
             }
-            systemPromptBuilder.append("=== 相关知识库参考 ===\n")
+            systemPromptBuilder.append("=== \u76f8\u5173\u77e5\u8bc6\u5e93\u53c2\u8003 ===\n")
             filteredRag.forEachIndexed { index, chunk ->
                 val source = buildChunkSource(chunk, index)
-                systemPromptBuilder.append("[参考${index + 1}] $source\n")
+                systemPromptBuilder.append("[\u53c2\u8003${index + 1}] $source\n")
                 systemPromptBuilder.append(chunk.text)
                 systemPromptBuilder.append("\n\n")
                 ragSources.add(source)
@@ -142,7 +176,7 @@ class PromptAssembler @Inject constructor(
         }
         LingShuLog.i(
             TAG,
-            "${tracePrefix}Step3 RAG注入完成, chunks=$ragChunkCount, sources=$ragSources, cost=${System.currentTimeMillis() - step3Start}ms"
+            "${tracePrefix}Step3 RAG\u6ce8\u5165\u5b8c\u6210, chunks=$ragChunkCount, sources=$ragSources, cost=${System.currentTimeMillis() - step3Start}ms"
         )
 
         val systemPrompt = systemPromptBuilder.toString()
@@ -161,14 +195,14 @@ class PromptAssembler @Inject constructor(
         messages.add(ChatMessage(role = "user", content = userInput))
         LingShuLog.i(
             TAG,
-            "${tracePrefix}Step4 历史对话注入完成, historyRounds=${recentHistory.size}, cost=${System.currentTimeMillis() - step4Start}ms"
+            "${tracePrefix}Step4 \u5386\u53f2\u5bf9\u8bdd\u6ce8\u5165\u5b8c\u6210, historyRounds=${recentHistory.size}, cost=${System.currentTimeMillis() - step4Start}ms"
         )
 
         val finalSystemPrompt = truncateIfNeeded(systemPrompt, messages)
         if (finalSystemPrompt != systemPrompt) {
             LingShuLog.w(
                 TAG,
-                "${tracePrefix}Prompt超出长度限制, 已截断 systemPrompt: ${systemPrompt.toByteArray().size} -> ${finalSystemPrompt.toByteArray().size} bytes"
+                "${tracePrefix}Prompt\u8d85\u51fa\u957f\u5ea6\u9650\u5236, \u5df2\u622a\u65ad systemPrompt: ${systemPrompt.toByteArray().size} -> ${finalSystemPrompt.toByteArray().size} bytes"
             )
         }
 
@@ -183,7 +217,7 @@ class PromptAssembler @Inject constructor(
 
         LingShuLog.i(
             TAG,
-            "${tracePrefix}Prompt装配完成, totalCost=${totalCost}ms, systemPromptBytes=${finalSystemPrompt.toByteArray().size}, messageCount=${messages.size}, meta=$meta"
+            "${tracePrefix}Prompt\u88c5\u914d\u5b8c\u6210, totalCost=${totalCost}ms, systemPromptBytes=${finalSystemPrompt.toByteArray().size}, messageCount=${messages.size}, meta=$meta"
         )
 
         return PromptAssembly(

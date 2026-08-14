@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.map
 
 private val Context.llmDataStore by preferencesDataStore(name = "llm_config")
 
-class LlmConfigStore(private val context: Context) {
+class LlmConfigStore(private val context: Context, private val cryptoHelper: com.lingshu.core.common.security.CryptoHelper) {
 
     private val moduleTag = "LlmConfigStore"
 
@@ -32,6 +32,9 @@ class LlmConfigStore(private val context: Context) {
 
         private const val DEFAULT_QWEN_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
         private const val DEFAULT_QWEN_MODEL = "qwen-plus"
+
+        /** 多 API Key 分隔符（用于 Key 轮询场景的备用 Key 存储） */
+        private const val API_KEYS_SEPARATOR = "||"
     }
 
     private object Keys {
@@ -100,16 +103,31 @@ class LlmConfigStore(private val context: Context) {
             val config = LlmConfig(
                 provider = provider,
                 baseUrl = prefs[Keys.providerKey(type, "baseUrl")] ?: defaults.baseUrl,
-                apiKey = prefs[Keys.providerKey(type, "apiKey")] ?: defaults.apiKey,
+                apiKey = (prefs[Keys.providerKey(type, "apiKey")] ?: defaults.apiKey).let { encrypted ->
+                    if (encrypted.isNotBlank()) {
+                        try { cryptoHelper.decrypt(encrypted) } catch (_: Exception) { encrypted }
+                    } else ""
+                },
                 modelName = prefs[Keys.providerKey(type, "modelName")] ?: defaults.modelName,
                 temperature = prefs[Keys.providerFloatKey(type, "temperature")] ?: defaults.temperature,
                 topP = prefs[Keys.providerFloatKey(type, "topP")] ?: defaults.topP,
                 maxTokens = prefs[Keys.providerIntKey(type, "maxTokens")] ?: defaults.maxTokens,
                 timeoutSeconds = prefs[Keys.providerIntKey(type, "timeoutSeconds")] ?: defaults.timeoutSeconds,
-                systemPromptOverride = prefs[Keys.providerKey(type, "systemPromptOverride")]
+                systemPromptOverride = prefs[Keys.providerKey(type, "systemPromptOverride")],
+                apiKeys = (prefs[Keys.providerKey(type, "apiKeys")] ?: "").let { encrypted ->
+                    if (encrypted.isNotBlank()) {
+                        try {
+                            val decrypted = cryptoHelper.decrypt(encrypted)
+                            if (decrypted.isNotBlank()) {
+                                decrypted.split(API_KEYS_SEPARATOR).filter { it.isNotBlank() }
+                            } else emptyList()
+                        } catch (_: Exception) { emptyList() }
+                    } else emptyList()
+                }
             )
             LingShuLog.d(moduleTag, "getConfigFlow[$provider]: model=${config.modelName} | " +
-                    "url=${config.baseUrl} | hasApiKey=${config.apiKey.isNotBlank()}")
+                    "url=${config.baseUrl} | hasApiKey=${config.apiKey.isNotBlank()} | " +
+                    "extraKeys=${config.apiKeys.size}")
             config
         }
     }
@@ -122,12 +140,13 @@ class LlmConfigStore(private val context: Context) {
         val type = config.provider.name
         LingShuLog.i(moduleTag, "saveConfig[$type]: model=${config.modelName} | " +
                 "baseUrl=${config.baseUrl} | apiKeyLen=${config.apiKey.length} | " +
+                "extraKeys=${config.apiKeys.size} | " +
                 "temp=${config.temperature} | topP=${config.topP} | maxTokens=${config.maxTokens} | " +
                 "timeout=${config.timeoutSeconds}s | sysOverride=${config.systemPromptOverride != null}")
 
         context.llmDataStore.edit { prefs ->
             prefs[Keys.providerKey(type, "baseUrl")] = config.baseUrl
-            prefs[Keys.providerKey(type, "apiKey")] = config.apiKey
+            prefs[Keys.providerKey(type, "apiKey")] = if (config.apiKey.isNotBlank()) cryptoHelper.encrypt(config.apiKey) else ""
             prefs[Keys.providerKey(type, "modelName")] = config.modelName
             prefs[Keys.providerFloatKey(type, "temperature")] = config.temperature
             prefs[Keys.providerFloatKey(type, "topP")] = config.topP
@@ -139,6 +158,9 @@ class LlmConfigStore(private val context: Context) {
             } else {
                 prefs.remove(Keys.providerKey(type, "systemPromptOverride"))
             }
+            // 备用 Key 列表加密存储（用分隔符拼接）
+            val keysJoined = config.apiKeys.filter { it.isNotBlank() }.joinToString(API_KEYS_SEPARATOR)
+            prefs[Keys.providerKey(type, "apiKeys")] = if (keysJoined.isNotBlank()) cryptoHelper.encrypt(keysJoined) else ""
         }
     }
 
@@ -168,6 +190,7 @@ class LlmConfigStore(private val context: Context) {
             prefs.remove(Keys.providerIntKey(type, "maxTokens"))
             prefs.remove(Keys.providerIntKey(type, "timeoutSeconds"))
             prefs.remove(Keys.providerKey(type, "systemPromptOverride"))
+            prefs.remove(Keys.providerKey(type, "apiKeys"))
         }
     }
 

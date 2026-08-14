@@ -1,4 +1,4 @@
-package com.lingshu.core.ui.theme
+﻿package com.lingshu.core.ui.theme
 
 import android.app.Activity
 import android.os.Build
@@ -64,7 +64,9 @@ fun LingShuTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
+            // Safe cast: skip window setup in non-Activity context (floating window service)
+            val activity = view.context as? Activity ?: return@SideEffect
+            val window = activity.window
             window.statusBarColor = Color.Transparent.toArgb()
             window.navigationBarColor = Color.Transparent.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false

@@ -54,6 +54,7 @@ fun ChatScreen(
     val inputText by viewModel.inputText.collectAsState()
     val ttsEnabled by viewModel.ttsEnabled.collectAsState()
     val isListening by viewModel.isListening.collectAsState()
+    val streamingMessage by viewModel.streamingMessage.collectAsState()
     val listState = rememberLazyListState()
 
     Scaffold(
@@ -117,8 +118,8 @@ fun ChatScreen(
                 }
                 is UiState.Success -> {
                     val messages = (messagesState as UiState.Success<List<Message>>).data
-                    
-                    if (messages.isEmpty()) {
+
+                    if (messages.isEmpty() && streamingMessage == null) {
                         EmptyState(
                             modifier = Modifier.fillMaxSize()
                         )
@@ -134,11 +135,23 @@ fun ChatScreen(
                             ) { message ->
                                 ChatBubble(message = message)
                             }
+
+                            // 流式生成中的 AI 消息气泡（逐字刷新）
+                            streamingMessage?.let { streaming ->
+                                item(key = "streaming-bubble") {
+                                    ChatBubble(
+                                        message = streaming,
+                                        isStreaming = true
+                                    )
+                                }
+                            }
                         }
 
-                        LaunchedEffect(messages.size) {
-                            if (messages.isNotEmpty()) {
-                                listState.animateScrollToItem(messages.size - 1)
+                        // 消息数或流式内容变化时，滚动到底部
+                        LaunchedEffect(messages.size, streamingMessage?.content) {
+                            val total = messages.size + (if (streamingMessage != null) 1 else 0)
+                            if (total > 0) {
+                                listState.animateScrollToItem(total - 1)
                             }
                         }
                     }

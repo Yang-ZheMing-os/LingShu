@@ -1,4 +1,4 @@
-package com.lingshu.feature.guide.navigation
+﻿package com.lingshu.feature.guide.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
@@ -16,6 +16,10 @@ import com.lingshu.feature.guide.presentation.settings.ModelSettingsScreen
 import com.lingshu.feature.mod.presentation.ModScreen
 import com.lingshu.feature.rag.presentation.RagScreen
 import com.lingshu.feature.wakeword.presentation.WakeWordScreen
+import com.lingshu.feature.health.presentation.HealthScreen
+import com.lingshu.feature.memory.presentation.MemoryListScreen
+import com.lingshu.feature.persona.presentation.PersonaScreen
+import com.lingshu.feature.proactive.presentation.ProactiveSettingsScreen
 
 sealed class GuideSection(val route: String) {
     object Guide : GuideSection("guide")
@@ -30,6 +34,10 @@ sealed class GuideSection(val route: String) {
     object Mod : GuideSection("mod")
     object WakeWord : GuideSection("wake_word")
     object Community : GuideSection("community")
+    object Health : GuideSection("health")
+    object Memory : GuideSection("memory")
+    object Persona : GuideSection("persona")
+    object Proactive : GuideSection("proactive")
 }
 
 @Composable
@@ -80,6 +88,18 @@ fun GuideNavGraph(
                 },
                 onNavigateToCommunity = {
                     navController.navigate(GuideSection.Community.route)
+                },
+                onNavigateToHealth = {
+                    navController.navigate(GuideSection.Health.route)
+                },
+                onNavigateToMemory = {
+                    navController.navigate(GuideSection.Memory.route)
+                },
+                onNavigateToPersona = {
+                    navController.navigate(GuideSection.Persona.route)
+                },
+                onNavigateToProactive = {
+                    navController.navigate(GuideSection.Proactive.route)
                 }
             )
         }
@@ -111,6 +131,18 @@ fun GuideNavGraph(
                 },
                 onNavigateToCommunity = {
                     navController.navigate(GuideSection.Community.route)
+                },
+                onNavigateToHealth = {
+                    navController.navigate(GuideSection.Health.route)
+                },
+                onNavigateToMemory = {
+                    navController.navigate(GuideSection.Memory.route)
+                },
+                onNavigateToPersona = {
+                    navController.navigate(GuideSection.Persona.route)
+                },
+                onNavigateToProactive = {
+                    navController.navigate(GuideSection.Proactive.route)
                 }
             )
         }
@@ -141,6 +173,22 @@ fun GuideNavGraph(
 
         composable(GuideSection.Community.route) {
             CommunityPlaceholderScreen(onBackClick = { navController.popBackStack() })
+        }
+
+        composable(GuideSection.Health.route) {
+            HealthScreen()
+        }
+
+        composable(GuideSection.Memory.route) {
+            MemoryListScreen()
+        }
+
+        composable(GuideSection.Persona.route) {
+            PersonaScreen()
+        }
+
+        composable(GuideSection.Proactive.route) {
+            ProactiveSettingsScreen()
         }
     }
 }

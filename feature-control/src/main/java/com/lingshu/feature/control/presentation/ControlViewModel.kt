@@ -63,6 +63,13 @@ class ControlViewModel @Inject constructor(
             is Command.OpenApp -> systemControl.openApp(command.packageName)
             is Command.CloseApp -> systemControl.closeApp(command.appName)
             Command.Screenshot -> systemControl.takeScreenshot()
+            is Command.Navigate -> systemControl.navigateToMap(command.destination)
+            Command.OpenTakeout -> systemControl.openTakeout()
+            // App 内部操作依赖无障碍编排，仅在 AI 指令链路（CommandExecutor）中执行
+            is Command.AppAction -> Result.error(
+                code = ErrorCodes.UNKNOWN_ERROR,
+                message = "App 内部操作请通过 AI 对话触发"
+            )
             is Command.Unknown -> Result.error(
                 code = ErrorCodes.UNKNOWN_ERROR,
                 message = "无法识别的指令: ${command.input}"

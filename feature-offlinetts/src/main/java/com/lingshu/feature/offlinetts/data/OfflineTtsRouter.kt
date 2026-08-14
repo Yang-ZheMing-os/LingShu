@@ -15,29 +15,28 @@ import javax.inject.Singleton
 
 @Singleton
 class OfflineTtsRouter @Inject constructor(
+    private val androidTtsEngine: AndroidTtsEngine,
     private val chatTtsEngine: ChatTtsEngine,
-    private val bertVits2Engine: BertVits2Engine,
-    private val piperEngine: PiperEngine,
     private val edgeTtsEngine: EdgeTtsEngine,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : IOfflineTtsEngine {
 
-    override val provider: OfflineTtsProvider = OfflineTtsProvider.CHATTTS
+    override val provider: OfflineTtsProvider = OfflineTtsProvider.ANDROID_TTS
 
     private val moduleTag = "OfflineTtsRouter"
 
+    // 降级链：Android 系统 TTS（兜底，无需模型/网络） → ChatTTS（本地实验） → EdgeTTS（远程兜底）
+    // Sherpa-ONNX 因 AAR 下载阻塞暂时移除，待网络恢复后插入最前面
     private val fallbackOrder: List<OfflineTtsProvider> = listOf(
+        OfflineTtsProvider.ANDROID_TTS,
         OfflineTtsProvider.CHATTTS,
-        OfflineTtsProvider.BERT_VITS2,
-        OfflineTtsProvider.PIPER,
         OfflineTtsProvider.EDGE_TTS_REMOTE_FALLBACK
     )
 
     private val engineMap: Map<OfflineTtsProvider, IOfflineTtsEngine> by lazy {
         mapOf(
+            OfflineTtsProvider.ANDROID_TTS to androidTtsEngine,
             OfflineTtsProvider.CHATTTS to chatTtsEngine,
-            OfflineTtsProvider.BERT_VITS2 to bertVits2Engine,
-            OfflineTtsProvider.PIPER to piperEngine,
             OfflineTtsProvider.EDGE_TTS_REMOTE_FALLBACK to edgeTtsEngine
         )
     }
@@ -378,5 +377,28 @@ class OfflineTtsRouter @Inject constructor(
             ErrorCodes.VOICE_CLONE_FAILED,
             "No TTS engine loaded to load voice $voiceId"
         )
+    }
+
+    /**
+     * 转发音色配置到 AndroidTtsEngine（系统 TTS 支持 voice/pitch/rate）。
+     * - voiceName 为 null 时使用默认 Voice
+     * - pitch/rate 范围 0.5~2.0，1.0 为正常
+     */
+    override fun setVoiceConfig(voiceName: String?, pitch: Float, rate: Float) {
+        LingShuLog.i(
+            moduleTag,
+            "setVoiceConfig ROUTE | voiceName=$voiceName | pitch=$pitch | rate=$rate"
+        )
+        androidTtsEngine.setVoiceConfig(voiceName, pitch, rate)
+    }
+
+    /**
+     * 转发音色详情查询到 AndroidTtsEngine。
+     * 返回系统 TTS 可用音色列表（含 name/locale/gender 等）。
+     */
+    override fun getVoiceDetails(): List<Map<String, String>> {
+        return runCatching {
+            androidTtsEngine.getVoiceDetails()
+        }.getOrDefault(emptyList())
     }
 }

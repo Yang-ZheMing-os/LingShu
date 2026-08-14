@@ -297,6 +297,48 @@ class AccessibilityControlImpl @Inject constructor() : IAccessibilityControl {
         }
     }
 
+    override suspend fun longPress(x: Float, y: Float, durationMs: Long): Result<Unit> {
+        LingShuLog.d(TAG, "execute long press: x=$x, y=$y, duration=$durationMs")
+        if (!isServiceRunning()) {
+            return Result.Error(
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
+            )
+        }
+        val service = LingShuAccessibilityService.getInstance() ?: return Result.Error(
+            code = ErrorCodes.ACCESSIBILITY_DISABLED,
+            message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
+        )
+        return try {
+            val path = android.graphics.Path().apply { moveTo(x, y) }
+            val stroke = android.accessibilityservice.GestureDescription.StrokeDescription(
+                path, 0, durationMs
+            )
+            val gesture = android.accessibilityservice.GestureDescription.Builder()
+                .addStroke(stroke)
+                .build()
+
+            val dispatched = service.dispatchGesture(gesture, object : android.accessibilityservice.AccessibilityService.GestureResultCallback() {
+                override fun onCompleted(g: android.accessibilityservice.GestureDescription?) {}
+                override fun onCancelled(g: android.accessibilityservice.GestureDescription?) {}
+            }, null)
+
+            if (dispatched) {
+                LingShuLog.d(TAG, "long press dispatched: x=$x, y=$y")
+                Result.Success(Unit)
+            } else {
+                LingShuLog.e(TAG, "long press dispatch failed: x=$x, y=$y")
+                Result.Error(
+                    code = ErrorCodes.UNKNOWN_ERROR,
+                    message = "long press dispatch failed"
+                )
+            }
+        } catch (e: Exception) {
+            LingShuLog.e(TAG, "long press failed: x=$x, y=$y", e)
+            Result.Error(code = ErrorCodes.UNKNOWN_ERROR, message = "long press failed: ${e.message}", cause = e)
+        }
+    }
+
     override suspend fun isServiceRunning(): Boolean {
         return LingShuAccessibilityService.isServiceRunning()
     }

@@ -5,5 +5,6 @@ data class ProactiveConfig(
     val triggers: Map<TriggerType, Boolean> = TriggerType.values().associateWith { true },
     val cooldownMinutes: Int = 60,
     val maxPerDay: Int = 5,
-    val quietHours: QuietHours = QuietHours()
+    val quietHours: QuietHours = QuietHours(),
+    val randomTriggerProbability: Float = 0.05f
 )

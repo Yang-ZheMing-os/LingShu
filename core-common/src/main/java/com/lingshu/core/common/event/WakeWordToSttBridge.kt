@@ -1,4 +1,4 @@
-package com.lingshu.core.common.event
+﻿package com.lingshu.core.common.event
 
 import com.lingshu.core.common.di.DefaultDispatcher
 import com.lingshu.core.common.log.LingShuLog
@@ -21,7 +21,7 @@ class WakeWordToSttBridge @Inject constructor(
     private val ttsEngine: ITtsEngine,
     private val floatingService: IFloatingService,
     @DefaultDispatcher private val handler: CoroutineDispatcher
-) {
+) : StartableBridge {
 
     private val scope = CoroutineScope(SupervisorJob() + handler)
     private var collectJob: Job? = null
@@ -29,7 +29,7 @@ class WakeWordToSttBridge @Inject constructor(
     private var finalizeJob: Job? = null
     private var lastResult: SttResult? = null
 
-    fun start() {
+    override fun start() {
         if (collectJob?.isActive == true) {
             LingShuLog.w("WakeWordToSttBridge", "Bridge 已在运行，忽略重复 start")
             return
@@ -42,7 +42,7 @@ class WakeWordToSttBridge @Inject constructor(
         }
     }
 
-    fun stop() {
+    override fun stop() {
         LingShuLog.d("WakeWordToSttBridge", "停止 WakeWord→STT 桥梁")
         collectJob?.cancel()
         collectJob = null

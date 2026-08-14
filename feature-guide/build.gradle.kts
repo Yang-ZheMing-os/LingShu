@@ -42,6 +42,10 @@ dependencies {
     implementation(project(":feature-clonevoice"))
     implementation(project(":feature-mod"))
     implementation(project(":feature-wakeword"))
+    implementation(project(":feature-health"))
+    implementation(project(":feature-memory"))
+    implementation(project(":feature-persona"))
+    implementation(project(":feature-proactive"))
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

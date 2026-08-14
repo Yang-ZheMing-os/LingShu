@@ -28,6 +28,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -37,6 +43,8 @@ dependencies {
     implementation(project(":core-common"))
     implementation(project(":core-ui"))
     implementation(project(":feature-stt"))
+    // 无障碍自动化操作：注入 IAccessibilityControl
+    implementation(project(":feature-accessibility"))
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
@@ -45,5 +53,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
 }

@@ -158,8 +158,10 @@ fun CloneVoiceScreen(
                             )
                             .clickable {
                                 if (isRecording) {
-                                    val file = viewModel.stopRecording()
-                                    file?.let { viewModel.cloneVoice(it) }
+                                    // 停止录音，完成后自动触发克隆
+                                    viewModel.stopRecording { file ->
+                                        file?.let { viewModel.cloneVoice(it) }
+                                    }
                                 } else {
                                     viewModel.startRecording()
                                 }
@@ -226,7 +228,7 @@ fun CloneVoiceScreen(
                         VoiceCard(
                             voice = voice,
                             isCurrent = currentVoice?.id == voice.id,
-                            onSelect = { viewModel.setCurrentVoice(voice.id) },
+                            onSelect = { viewModel.applyVoice(voice.id) },
                             onDelete = { showDeleteDialog = voice },
                             onPreview = { viewModel.previewVoice(voice.id, previewText) },
                             previewText = previewText,
@@ -252,11 +254,13 @@ fun CloneVoiceScreen(
         )
     }
 
-    if (cloneState is UiState.Error) {
+    // 录音/克隆失败时展示实际错误信息（如模拟器无麦克风）
+    val errorState = cloneState
+    if (errorState is UiState.Error) {
         AlertDialog(
             onDismissRequest = { viewModel.resetCloneState() },
-            title = { Text("克隆失败") },
-            text = { Text("声音克隆失败，请重试。") },
+            title = { Text("操作失败") },
+            text = { Text(errorState.message) },
             confirmButton = {
                 TextButton(onClick = { viewModel.resetCloneState() }) {
                     Text("确定")
@@ -370,11 +374,23 @@ private fun VoiceCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(
-                        text = voice.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = voice.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        // 音色类型标签：系统音色 / 自定义录音
+                        Text(
+                            text = if (voice.isSystemVoice) "系统音色" else "自定义录音",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (voice.isSystemVoice)
+                                MaterialTheme.colorScheme.tertiary
+                            else
+                                MaterialTheme.colorScheme.primary
+                        )
+                    }
                     Text(
                         text = formatDate(voice.createdAt),
                         style = MaterialTheme.typography.bodySmall,
