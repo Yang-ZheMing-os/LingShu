@@ -71,6 +71,17 @@ sealed class AppEvent(open val traceId: String) {
         override val traceId: String
     ) : AppEvent(traceId)
 
+    /**
+     * 控制命令执行成功后，请求把最后一条 AI 回复覆盖为 [canonicalReply]。
+     *
+     * 用于强制规范口语化/冗长回复为固定短句（如"微信应用已打开"），
+     * 由 ChatViewModel 监听后调用 IChatRepository.rewriteLastAssistantMessage。
+     */
+    data class AssistantReplyOverridden(
+        val canonicalReply: String,
+        override val traceId: String
+    ) : AppEvent(traceId)
+
     data class ModStateChanged(
         val modId: String,
         val enabled: Boolean,
@@ -131,6 +142,7 @@ class AppEventBusImpl : IAppEventBus {
             is AppEvent.AiReplyFinished -> "reply=${event.reply.take(50)}"
             is AppEvent.AiReplyError -> "code=${event.code}, msg=${event.message}"
             is AppEvent.CommandExecuted -> "cmd=${event.command}, success=${event.success}"
+            is AppEvent.AssistantReplyOverridden -> "reply=${event.canonicalReply.take(30)}"
             is AppEvent.ModStateChanged -> "modId=${event.modId}, enabled=${event.enabled}"
             is AppEvent.ProactiveTriggered -> "type=${event.type}, title=${event.title}"
         }

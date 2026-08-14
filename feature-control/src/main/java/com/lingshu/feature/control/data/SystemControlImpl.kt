@@ -191,25 +191,76 @@ class SystemControlImpl @Inject constructor(
         action = "打开应用",
         timeoutMs = OPEN_APP_TIMEOUT_MS
     ) {
-        try {
-            val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(intent)
-                Result.success(Unit)
-            } else {
+        val targetPkg = packageName.trim()
+        LingShuLog.i("SystemControl", "========== openApp 开始 ==========")
+        LingShuLog.i("SystemControl", "openApp: 请求打开 packageName=[$targetPkg]")
+        if (targetPkg.isBlank()) {
+            LingShuLog.w("SystemControl", "openApp: 包名为空，直接返回失败")
+            Result.error(code = ErrorCodes.UNKNOWN_ERROR, message = "包名为空，无法打开应用")
+        } else {
+            try {
+                val pm = context.packageManager
+                var intent = pm.getLaunchIntentForPackage(targetPkg)
+                LingShuLog.d("SystemControl", "openApp: getLaunchIntentForPackage 返回: ${if (intent == null) "null(fallback)" else "OK"}")
+
+                // 终极兜底：某些定制 ROM / 游戏 / 未声明 launcher 的应用，
+                // getLaunchIntentForPackage 会返回 null；改为通过 CATEGORY_LAUNCHER 扫
+                // resolveInfo 的第一个 Activity 手动拼 Intent
+                if (intent == null) {
+                    LingShuLog.d("SystemControl", "openApp: fallback 到 CATEGORY_LAUNCHER queryIntentActivities")
+                    val launchIntent = Intent(Intent.ACTION_MAIN, null)
+                        .addCategory(Intent.CATEGORY_LAUNCHER)
+                        .setPackage(targetPkg)
+                    val resolveList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        pm.queryIntentActivities(
+                            launchIntent,
+                            android.content.pm.PackageManager.ResolveInfoFlags.of(0)
+                        )
+                    } else {
+                        @Suppress("DEPRECATION")
+                        pm.queryIntentActivities(launchIntent, 0)
+                    }
+                    val activity = resolveList.firstOrNull()?.activityInfo
+                    LingShuLog.d("SystemControl", "openApp: queryIntentActivities 命中 ${resolveList.size} 项")
+                    if (activity != null) {
+                        intent = Intent(Intent.ACTION_MAIN).apply {
+                            addCategory(Intent.CATEGORY_LAUNCHER)
+                            setClassName(activity.packageName, activity.name)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        LingShuLog.i(
+                            "SystemControl",
+                            "openApp: ✅ ResolveInfo 兜底拼 Intent: ${activity.packageName}/${activity.name}"
+                        )
+                    } else {
+                        LingShuLog.w("SystemControl", "openApp: ❌ queryIntentActivities 也没命中 launcher activity")
+                    }
+                }
+
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    LingShuLog.i(
+                        "SystemControl",
+                        "openApp: 即将 startActivity($targetPkg), Intent=$intent"
+                    )
+                    context.startActivity(intent)
+                    LingShuLog.i("SystemControl", "openApp: ✅ startActivity 调用成功: $targetPkg")
+                    Result.success(Unit)
+                } else {
+                    LingShuLog.e("SystemControl", "openApp: ❌ 应用未安装或找不到启动页：$targetPkg")
+                    Result.error(
+                        code = ErrorCodes.UNKNOWN_ERROR,
+                        message = "应用未安装或找不到启动页：$targetPkg"
+                    )
+                }
+            } catch (e: Exception) {
+                LingShuLog.e("SystemControl", "openApp: ❌ startActivity 抛出异常: $targetPkg", e)
                 Result.error(
                     code = ErrorCodes.UNKNOWN_ERROR,
-                    message = "应用未安装"
+                    message = "打开应用失败",
+                    cause = e
                 )
             }
-        } catch (e: Exception) {
-            LingShuLog.e("SystemControl", "打开应用失败: $packageName", e)
-            Result.error(
-                code = ErrorCodes.UNKNOWN_ERROR,
-                message = "打开应用失败",
-                cause = e
-            )
         }
     }
 
@@ -292,7 +343,78 @@ class SystemControlImpl @Inject constructor(
 
     override fun getPackageNameByAppName(appName: String): String {
         val key = appName.trim().lowercase()
-        return APP_PACKAGE_MAP[key] ?: ""
+        LingShuLog.d("SystemControl", "getPackageNameByAppName: 输入=$appName, key=$key")
+        // 1) 静态映射优先命中（常见 App 不用扫 PM，快）
+        APP_PACKAGE_MAP[key]?.let {
+            LingShuLog.i("SystemControl", "getPackageNameByAppName: ✅ 静态表命中 $appName -> $it")
+            return it
+        }
+        LingShuLog.d("SystemControl", "getPackageNameByAppName: 静态表未命中，走 PackageManager 动态匹配: $appName")
+        // 2) 动态 fallback：扫本机已安装应用，按应用名称模糊匹配
+        resolveByPackageManager(appName.trim())?.let {
+            LingShuLog.i("SystemControl", "getPackageNameByAppName: ✅ PackageManager 匹配 $appName -> $it")
+            return it
+        }
+        LingShuLog.w("SystemControl", "getPackageNameByAppName: ❌ 全部未命中: appName=$appName key=$key")
+        return ""
+    }
+
+    /**
+     * 通过 PackageManager 在已安装应用中按 label 模糊匹配包名。
+     *
+     * 匹配优先级：完全相等（忽略大小写）→ 包含关系（label 包含查询词 / 查询词包含 label）。
+     * 返回首个命中的包名，未命中返回 null。
+     */
+    private fun resolveByPackageManager(query: String): String? {
+        if (query.isBlank()) return null
+        val pm = context.packageManager
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val apps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.queryIntentActivities(
+                intent,
+                android.content.pm.PackageManager.ResolveInfoFlags.of(0)
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            pm.queryIntentActivities(intent, 0)
+        }
+        val q = query.lowercase()
+        LingShuLog.d(
+            "SystemControl",
+            "resolveByPackageManager: query=$query q=$q 已扫描应用数=${apps.size}"
+        )
+
+        // 完全相等
+        apps.firstOrNull {
+            it.loadLabel(pm).toString().trim().lowercase() == q
+        }?.let {
+            val label = it.loadLabel(pm).toString().trim()
+            LingShuLog.d("SystemControl", "resolveByPackageManager: ✅ 完全相等命中 label=[$label] pkg=${it.activityInfo.packageName}")
+            return it.activityInfo.packageName
+        }
+
+        // label 包含查询词（例：label"高德地图"，查询"高德"）
+        apps.firstOrNull {
+            it.loadLabel(pm).toString().trim().lowercase().contains(q)
+        }?.let {
+            val label = it.loadLabel(pm).toString().trim()
+            LingShuLog.d("SystemControl", "resolveByPackageManager: ✅ label包含查询词命中 label=[$label] pkg=${it.activityInfo.packageName}")
+            return it.activityInfo.packageName
+        }
+
+        // 查询词包含 label（例：查询"王者农药"，label 是"王者荣耀"不太能命中，
+        // 但 label 是短词的情况下能兜底）
+        apps.firstOrNull {
+            val label = it.loadLabel(pm).toString().trim().lowercase()
+            label.isNotEmpty() && q.contains(label)
+        }?.let {
+            val label = it.loadLabel(pm).toString().trim()
+            LingShuLog.d("SystemControl", "resolveByPackageManager: ✅ 查询词包含label命中 label=[$label] pkg=${it.activityInfo.packageName}")
+            return it.activityInfo.packageName
+        }
+
+        LingShuLog.d("SystemControl", "resolveByPackageManager: ❌ 未命中任何 label 匹配: $query")
+        return null
     }
 
     override suspend fun openAppWithDeepLink(
@@ -421,9 +543,9 @@ class SystemControlImpl @Inject constructor(
         private const val SYSTEM_CONTROL_TIMEOUT_MS = 5000L
         private const val OPEN_APP_TIMEOUT_MS = 10000L
 
-        /** 主流 App 中文名 -> 包名 映射表（key 已小写化，便于匹配） */
+        /** 主流 App 中文名 -> 包名 映射表（静态映射优先，未命中再走 PackageManager 动态匹配） */
         private val APP_PACKAGE_MAP: Map<String, String> = mapOf(
-            // 系统应用
+            // ==================== 系统应用 ====================
             "设置" to "com.android.settings",
             "相机" to "com.android.camera",
             "相册" to "com.android.gallery",
@@ -432,37 +554,261 @@ class SystemControlImpl @Inject constructor(
             "浏览器" to "com.android.browser",
             "日历" to "com.android.calendar",
             "时钟" to "com.android.deskclock",
+            "闹钟" to "com.android.deskclock",
             "计算器" to "com.android.calculator2",
-            // 社交
+            "短信" to "com.android.mms",
+            "电话" to "com.android.dialer",
+            "拨号" to "com.android.dialer",
+            "通讯录" to "com.android.contacts",
+            "联系人" to "com.android.contacts",
+            "邮件" to "com.android.email",
+            "文件管理" to "com.android.documentsui",
+            "录音机" to "com.android.soundrecorder",
+            "下载" to "com.android.providers.downloads.ui",
+
+            // ==================== 社交 ====================
             "微信" to "com.tencent.mm",
             "qq" to "com.tencent.mobileqq",
+            "qq空间" to "com.qzone",
             "微博" to "com.sina.weibo",
-            // 地图
+            "小红书" to "com.xingin.xhs",
+            "知乎" to "com.zhihu.android",
+            "豆瓣" to "com.douban.frodo",
+            "陌陌" to "com.immomo.momo",
+            "探探" to "com.p1.mobile.putong",
+            "soul" to "cn.soulapp.android",
+            "钉钉" to "com.alibaba.android.rimet",
+            "企业微信" to "com.tencent.wework",
+            "飞书" to "com.ss.android.lark",
+            "telegram" to "org.telegram.messenger",
+            "tg" to "org.telegram.messenger",
+            "whatsapp" to "com.whatsapp",
+            "discord" to "com.discord",
+            "twitter" to "com.twitter.android",
+            "x" to "com.twitter.android",
+            "facebook" to "com.facebook.katana",
+            "instagram" to "com.instagram.android",
+            "ins" to "com.instagram.android",
+            "line" to "jp.naver.line.android",
+
+            // ==================== 视频 / 短视频 ====================
+            "抖音" to "com.ss.android.ugc.aweme",
+            "抖音极速版" to "com.ss.android.ugc.aweme.lite",
+            "快手" to "com.smile.gifmaker",
+            "快手极速版" to "com.kuaishou.nebula",
+            "哔哩哔哩" to "tv.danmaku.bili",
+            "b站" to "tv.danmaku.bili",
+            "bilibili" to "tv.danmaku.bili",
+            "腾讯视频" to "com.tencent.qqlive",
+            "爱奇艺" to "com.qiyi.video",
+            "优酷" to "com.youku.phone",
+            "芒果tv" to "com.hunantv.imgo.activity",
+            "搜狐视频" to "com.sohu.sohuvideo",
+            "西瓜视频" to "com.ss.android.article.video",
+            "火山" to "com.ss.android.ugc.live",
+            "youtube" to "com.google.android.youtube",
+            "netflix" to "com.netflix.mediaclient",
+            "twitch" to "tv.twitch.android.app",
+            "acfun" to "tv.acfundanmaku.video",
+
+            // ==================== 音乐 / 音频 ====================
+            "网易云音乐" to "com.netease.cloudmusic",
+            "网易音乐" to "com.netease.cloudmusic",
+            "qq音乐" to "com.tencent.qqmusic",
+            "酷狗" to "com.kugou.android",
+            "酷我" to "cn.kuwo.player",
+            "虾米" to "fm.xiami.main",
+            "喜马拉雅" to "com.ximalaya.ting.android",
+            "荔枝fm" to "com.tinytimemachine.fmlite",
+            "懒人听书" to "bubei.tingshu",
+            "蜻蜓fm" to "fm.qingting.qtradio",
+            "spotify" to "com.spotify.music",
+
+            // ==================== 购物 / 生活服务 ====================
+            "淘宝" to "com.taobao.taobao",
+            "天猫" to "com.tmall.wireless",
+            "京东" to "com.jingdong.app.mall",
+            "拼多多" to "com.xunmeng.pinduoduo",
+            "苏宁易购" to "com.suning.mobile.ebuy",
+            "唯品会" to "com.achievo.vipshop",
+            "当当" to "com.dangdang.buy2",
+            "闲鱼" to "com.taobao.idlefish",
+            "转转" to "com.wuba.zhuanzhuan",
+            "得物" to "com.shizhuang.duapp",
+            "毒" to "com.shizhuang.duapp",
+            "小红书" to "com.xingin.xhs",
+            "美团外卖" to "com.sankuai.meituan",
+            "美团" to "com.sankuai.meituan",
+            "饿了么" to "me.ele",
+            "大众点评" to "com.dianping.v1",
+            "口碑" to "com.taobao.mobile.dipei",
+            "支付宝" to "com.eg.android.AlipayGphone",
+            "云闪付" to "com.unionpay",
+            "手机银行" to "com.chinamworld.main",
+
+            // ==================== 地图 / 出行 ====================
             "高德地图" to "com.autonavi.minimap",
             "高德" to "com.autonavi.minimap",
             "百度地图" to "com.baidu.BaiduMap",
             "百度" to "com.baidu.BaiduMap",
             "腾讯地图" to "com.tencent.map",
-            // 外卖
-            "美团外卖" to "com.sankuai.meituan",
-            "美团" to "com.sankuai.meituan",
-            "饿了么" to "me.ele",
-            // 购物
-            "淘宝" to "com.taobao.taobao",
-            "京东" to "com.jingdong.app.mall",
-            "拼多多" to "com.xunmeng.pinduoduo",
-            // 视频
-            "抖音" to "com.ss.android.ugc.aweme",
-            "哔哩哔哩" to "tv.danmaku.bili",
-            "b站" to "tv.danmaku.bili",
-            "bilibili" to "tv.danmaku.bili",
-            "快手" to "com.smile.gifmaker",
-            // 音乐
-            "网易云音乐" to "com.netease.cloudmusic",
-            "网易音乐" to "com.netease.cloudmusic",
-            "qq音乐" to "com.tencent.qqmusic",
-            // 生活
-            "支付宝" to "com.eg.android.AlipayGphone"
+            "滴滴出行" to "com.sdu.didi.psnger",
+            "滴滴" to "com.sdu.didi.psnger",
+            "携程" to "ctrip.android.view",
+            "去哪儿" to "com.Qunar",
+            "飞猪" to "com.taobao.flypig",
+            "12306" to "com.MobileTicket",
+            "铁路12306" to "com.MobileTicket",
+            "智行" to "com.yipiao",
+            "航旅纵横" to "com.umetrip.android.msky.app",
+
+            // ==================== 阅读 / 资讯 ====================
+            "今日头条" to "com.ss.android.article.news",
+            "头条" to "com.ss.android.article.news",
+            "腾讯新闻" to "com.tencent.news",
+            "网易新闻" to "com.netease.newsreader.activity",
+            "新浪新闻" to "com.sina.news",
+            "搜狐新闻" to "com.sohu.newsclient",
+            "凤凰新闻" to "com.ifeng.news2",
+            "澎湃" to "com.wondertek.paper",
+            "起点中文" to "com.qidian.QDReader",
+            "起点阅读" to "com.qidian.QDReader",
+            "七猫" to "com.kmxs.reader",
+            "番茄免费小说" to "com.dragon.read",
+            "番茄小说" to "com.dragon.read",
+            "掌阅" to "com.chaozh.iReaderFree",
+            "微信读书" to "com.tencent.weread",
+            "kindle" to "com.amazon.kindle",
+            "知乎" to "com.zhihu.android",
+
+            // ==================== 办公 / 工具 ====================
+            "wps" to "cn.wps.moffice_eng",
+            "wps office" to "cn.wps.moffice_eng",
+            "腾讯文档" to "com.tencent.docs",
+            "石墨文档" to "chuxin.shimo.shimowendang",
+            "飞书" to "com.ss.android.lark",
+            "钉钉" to "com.alibaba.android.rimet",
+            "企业微信" to "com.tencent.wework",
+            "有道词典" to "com.youdao.dict",
+            "欧路词典" to "com.eusoft.eudic",
+            "百度网盘" to "com.baidu.netdisk",
+            "夸克" to "com.quark.browser",
+            "uc浏览器" to "com.UCMobile",
+            "chrome" to "com.android.chrome",
+            "edge" to "com.microsoft.emmx",
+            "火狐" to "org.mozilla.firefox",
+            "搜狗输入法" to "com.sohu.inputmethod.sogou",
+            "讯飞输入法" to "com.iflytek.inputmethod",
+            "百度输入法" to "com.baidu.input",
+            "微信" to "com.tencent.mm",
+
+            // ==================== 金融 / 理财 ====================
+            "同花顺" to "com.hexin.plat.android",
+            "东方财富" to "com.eastmoney.android.berine",
+            "支付宝" to "com.eg.android.AlipayGphone",
+            "招商银行" to "cmb.pb",
+            "工商银行" to "com.icbc",
+            "建设银行" to "com.chinamworld.main",
+            "农业银行" to "com.android.bankabc",
+            "中国银行" to "com.chinamworld.bocmbci",
+            "交通银行" to "com.bankcomm.Bankcomm",
+            "平安口袋银行" to "com.pingan.paces.ccms",
+            "支付宝" to "com.eg.android.AlipayGphone",
+            "京东金融" to "com.jd.jrapp",
+            "度小满金融" to "com.duxiaoman.wealth",
+
+            // ==================== 拍照 / 修图 ====================
+            "美颜相机" to "com.meitu.meiyancamera",
+            "美图秀秀" to "com.mt.mtxx.mtxx",
+            "醒图" to "com.xt.retouch",
+            "一甜相机" to "com.kwai.m2u",
+            "黄油相机" to "com.by.butter.camera",
+            "轻颜" to "com.gorgeous.lite",
+            "snapseed" to "com.niksoftware.snapseed",
+            "lightroom" to "com.adobe.lrmobile",
+
+            // ==================== 游戏（主流手游 + 大厂通用入口包名） ====================
+            "王者荣耀" to "com.tencent.tmgp.sgame",
+            "王者" to "com.tencent.tmgp.sgame",
+            "和平精英" to "com.tencent.tmgp.pubgmhd",
+            "吃鸡" to "com.tencent.tmgp.pubgmhd",
+            "原神" to "com.miHoYo.Yuanshen",
+            "崩坏星穹铁道" to "com.miHoYo.StarRail",
+            "星穹铁道" to "com.miHoYo.StarRail",
+            "绝区零" to "com.miHoYo.ZZZ",
+            "崩坏3" to "com.miHoYo.bh3",
+            "崩三" to "com.miHoYo.bh3",
+            "英雄联盟手游" to "com.tencent.lolm",
+            "lol手游" to "com.tencent.lolm",
+            "金铲铲之战" to "com.tencent.tmgp.jxcc",
+            "金铲铲" to "com.tencent.tmgp.jxcc",
+            "欢乐斗地主" to "com.taurus.terry",
+            "斗地主" to "com.taurus.terry",
+            "天天象棋" to "com.tencent.tmgp.xxchess",
+            "开心消消乐" to "com.happyelements.AndroidAnimal",
+            "消消乐" to "com.happyelements.AndroidAnimal",
+            "和平精英" to "com.tencent.tmgp.pubgmhd",
+            "第五人格" to "com.netease.dwrg5",
+            "阴阳师" to "com.netease.onmyoji",
+            "我的世界" to "com.netease.x19",
+            "mc" to "com.netease.x19",
+            "迷你世界" to "com.minitech.miniworld",
+            "蛋仔派对" to "com.netease.party",
+            "蛋仔" to "com.netease.party",
+            "光遇" to "com.netease.skies",
+            "明日方舟" to "com.hypergryph.arknights",
+            "炉石传说" to "com.blizzard.wtcg.hearthstone",
+            "部落冲突" to "com.supercell.clashofclans",
+            "皇室战争" to "com.supercell.clashroyale",
+            "pubg mobile" to "com.tencent.ig",
+            "使命召唤手游" to "com.tencent.tmgp.cod",
+            "使命召唤" to "com.tencent.tmgp.cod",
+            "地下城与勇士手游" to "com.tencent.tmgp.dnf",
+            "dnf" to "com.tencent.tmgp.dnf",
+            "cf手游" to "com.tencent.tmgp.cf",
+            "穿越火线" to "com.tencent.tmgp.cf",
+            "火影忍者手游" to "com.tencent.tmgp.anhninja",
+            "火影忍者" to "com.tencent.tmgp.anhninja",
+            "跑跑卡丁车" to "com.tencent.tmgp.popkart",
+            "qq飞车" to "com.tencent.tmgp.speedmobile",
+            "qq飞车手游" to "com.tencent.tmgp.speedmobile",
+            "妄想山海" to "com.tencent.tmgp.delphinus",
+            "天涯明月刀手游" to "com.tencent.tmgp.tyxyd",
+            "天龙八部手游" to "com.tencent.tmgp.tlbb",
+            "逆水寒手游" to "com.netease.nishuihan",
+            "一梦江湖" to "com.netease.wyhz",
+            "闪耀暖暖" to "com.papegames.nn6",
+            "恋与制作人" to "com.papegames.qzxy",
+            "食物语" to "com.tencent.tmgp.swjy",
+            "公主连结" to "com.tencent.tmgp.pcr",
+            "碧蓝航线" to "com.bilibili.ship.theseus",
+            "战双帕弥什" to "com.tencent.tmgp.construct",
+            "少女前线" to "com.digitalsky.girlsfrontline",
+            "FGO" to "com.bilibili.fgo.portal",
+            "命运冠位指定" to "com.bilibili.fgo.portal",
+            "永劫无间手游" to "com.netease.yjwj",
+            "诛仙手游" to "com.laohu.zhuxian",
+            "问道手游" to "com.gbits.atm.guopan",
+            "新笑傲江湖" to "com.laohu.xiaoao",
+            "剑网3" to "com.xoyo.seasun.jw3",
+            "剑与远征" to "com.tencent.tmgp.jjyc",
+            "万国觉醒" to "com.lilithgames.rok.offical.cn",
+            "部落冲突" to "com.supercell.clashofclans",
+            "海岛奇兵" to "com.supercell.boombeach",
+            "狂野飙车9" to "com.gameloft.android.ANMP.GloftA9HM",
+            "我的世界国际版" to "com.mojang.minecraftpe",
+            "植物大战僵尸" to "com.popcap.pvz2cthddl",
+            "植物大战僵尸2" to "com.popcap.pvz2cthddl",
+            "保卫萝卜" to "com.carrot.carrotfantasy",
+            "纪念碑谷" to "com.monumentvalley",
+            "angry birds" to "com.rovio.angrybirds",
+            "地铁跑酷" to "com.kiloo.subwaysurf",
+            "神庙逃亡" to "com.imangi.templerun",
+            "2048" to "com.androbaby.game2048",
+            "开心水族箱" to "com.happyelements.aquarium.android",
+            "狼人杀" to "com.wd.werewolf",
+            "谁是卧底" to "com.tencent.tmgp.sswb",
+            "剧本杀" to "com.zhanyou.benghuai"
         )
     }
 }

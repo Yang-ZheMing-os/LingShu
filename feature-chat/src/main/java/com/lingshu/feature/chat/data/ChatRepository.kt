@@ -11,6 +11,8 @@ import com.lingshu.core.data.llm.LlmRouter
 import com.lingshu.core.data.llm.ModelProviderType
 import com.lingshu.feature.chat.data.prompt.IPromptAssembler
 import com.lingshu.feature.chat.data.prompt.PromptInjector
+import com.lingshu.core.common.event.IAppEventBus
+import com.lingshu.core.common.event.AppEvent
 import com.lingshu.core.common.event.IChatRepository
 import com.lingshu.core.common.event.Message
 import com.lingshu.feature.memory.domain.IMemoryService
@@ -32,6 +34,7 @@ class ChatRepository @Inject constructor(
     private val promptInjector: PromptInjector,
     private val llmRouter: LlmRouter,
     private val llmConfigStore: com.lingshu.core.data.llm.LlmConfigStore,
+    private val eventBus: IAppEventBus,
     @Suppress("unused") private val ragService: IRagService,
     private val memoryServiceLazy: Provider<IMemoryService>,
     private val personaServiceLazy: Provider<IPersonaService>
@@ -255,6 +258,16 @@ class ChatRepository @Inject constructor(
     override suspend fun clearMessages() {
 
         messageDao.deleteAllMessages()
+    }
+
+    override suspend fun rewriteLastAssistantMessage(newContent: String) {
+        val id = messageDao.getLastAssistantMessageId()
+        if (id == null) {
+            LingShuLog.w(TAG, "rewriteLastAssistantMessage: 未找到上一条 AI 消息，跳过")
+            return
+        }
+        messageDao.updateMessageContent(id, newContent)
+        LingShuLog.i(TAG, "已将最后一条 AI 消息重写为: ${newContent.take(40)} (id=$id)")
     }
 
     private suspend fun callLlmWithRetry(

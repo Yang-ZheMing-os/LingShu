@@ -19,4 +19,12 @@ interface IChatRepository {
     ): Result<Message>
 
     suspend fun clearMessages()
+
+    /**
+     * 用 [newContent] 覆盖最后一条 AI 助手消息的正文。
+     *
+     * 用于控制命令执行后，把 LLM 原始啰嗦回复替换成规范短句（如"微信应用已打开"）。
+     * 无 AI 消息时什么都不做。
+     */
+    suspend fun rewriteLastAssistantMessage(newContent: String)
 }

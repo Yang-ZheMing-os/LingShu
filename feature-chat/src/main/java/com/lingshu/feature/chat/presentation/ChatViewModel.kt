@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lingshu.core.common.error.Result
 import com.lingshu.core.common.state.UiState
+import com.lingshu.core.common.ToolCallCleaner
 import com.lingshu.core.common.error.ErrorCodes
 import com.lingshu.core.common.event.AppEvent
 import com.lingshu.core.common.event.IAppEventBus
@@ -13,11 +14,15 @@ import com.lingshu.core.common.event.ISttEngine
 import com.lingshu.core.common.event.ITtsEngine
 import com.lingshu.core.common.event.Message
 import com.lingshu.core.common.event.SttResult
+import com.lingshu.core.common.event.on
+import com.lingshu.core.common.event.ICommandSyncer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -27,7 +32,8 @@ class ChatViewModel @Inject constructor(
     private val chatRepository: IChatRepository,
     private val ttsEngine: ITtsEngine,
     private val sttEngine: ISttEngine,
-    private val eventBus: IAppEventBus
+    private val eventBus: IAppEventBus,
+    private val commandSyncer: ICommandSyncer
 ) : ViewModel() {
 
     private val _messagesState = MutableStateFlow<UiState<List<Message>>>(UiState.Idle)
@@ -51,6 +57,25 @@ class ChatViewModel @Inject constructor(
 
     init {
         loadMessages()
+        observeOverrideEvents()
+    }
+
+    /** 监听控制命令执行后的规范短句覆盖事件，DB 更新后 Room Flow 会自动推到 UI */
+    private fun observeOverrideEvents() {
+        viewModelScope.launch {
+            eventBus.on<AppEvent.AssistantReplyOverridden>()
+                .onEach { event ->
+                    LingShuLog.i(
+                        "ChatViewModel",
+                        "覆盖最后一条 AI 回复: ${event.canonicalReply} (traceId=${event.traceId})"
+                    )
+                    chatRepository.rewriteLastAssistantMessage(event.canonicalReply)
+                }
+                .catch { e ->
+                    LingShuLog.e("ChatViewModel", "监听 AssistantReplyOverridden 异常", e)
+                }
+                .launchIn(this)
+        }
     }
 
     fun loadMessages() {
@@ -103,26 +128,68 @@ class ChatViewModel @Inject constructor(
 
             when (val result = chatRepository.sendMessageStream(text) { token ->
                 streaming.append(token)
+                // 流式渲染时尽力清理 TOOL_CALL：没匹配到的半截标记会保留，
+                // 最终落库时 ChatBubble 还会再剥一次，用户不会看到 JSON
+                val cleaned = ToolCallCleaner.stripToolCallMarks(streaming.toString())
                 _streamingMessage.value = _streamingMessage.value?.copy(
-                    content = streaming.toString()
+                    content = cleaned
                 )
             }) {
                 is Result.Success -> {
                     _sendState.value = UiState.Success(result.data)
+                    val rawReply = result.data.content
                     LingShuLog.i(
                         "ChatViewModel",
-                        "$stepTag 流式对话成功，reply=${result.data.content.take(80)}"
+                        "$stepTag 流式对话成功，reply=${rawReply.take(80)}"
                     )
                     eventBus.emit(
                         AppEvent.AiReplyFinished(
-                            reply = result.data.content,
+                            reply = rawReply,
                             userInput = text,
                             traceId = traceId
                         )
                     )
-                    if (_ttsEnabled.value && !result.data.isUser) {
-                        speakMessage(result.data.content)
-                    }
+
+                    // 一次性兜底执行：用户说"打开微信""调亮度"等控制指令，
+                    // 直接独立识别并执行，不依赖 LLM 是否生成 [TOOL_CALL] 标记、
+                    // 也不依赖事件总线。执行成功后直接覆盖 AI 回复为规范短句，
+                    // 解决"只说不做"的终极保险。
+                    LingShuLog.d(
+                        "ChatViewModel",
+                        "$stepTag 调用 CommandSyncer.sync(text=${text.take(80)})"
+                    )
+                    runCatching { commandSyncer.sync(text) }
+                        .onSuccess { canonical ->
+                            LingShuLog.d(
+                                "ChatViewModel",
+                                "$stepTag CommandSyncer.sync 返回: ${if (canonical == null) "null" else "\"$canonical\""}"
+                            )
+                            if (!canonical.isNullOrBlank()) {
+                                LingShuLog.i(
+                                    "ChatViewModel",
+                                    "$stepTag ✅ CommandSyncer 命中 → 覆盖 AI 回复: $canonical"
+                                )
+                                chatRepository.rewriteLastAssistantMessage(canonical)
+                                // TTS 朗读规范短句（不读 LLM 啰嗦原文）
+                                if (_ttsEnabled.value && !result.data.isUser) {
+                                    speakMessage(canonical)
+                                }
+                            } else {
+                                LingShuLog.v(
+                                    "ChatViewModel",
+                                    "$stepTag CommandSyncer 未命中（非控制类指令，沿用 LLM 回复）"
+                                )
+                                if (_ttsEnabled.value && !result.data.isUser) {
+                                    speakMessage(ToolCallCleaner.stripToolCallMarks(rawReply))
+                                }
+                            }
+                        }
+                        .onFailure { e ->
+                            LingShuLog.e("ChatViewModel", "$stepTag CommandSyncer.sync 抛出异常", e)
+                            if (_ttsEnabled.value && !result.data.isUser) {
+                                speakMessage(ToolCallCleaner.stripToolCallMarks(rawReply))
+                            }
+                        }
                 }
                 is Result.Error -> {
                     _sendState.value = UiState.Error(

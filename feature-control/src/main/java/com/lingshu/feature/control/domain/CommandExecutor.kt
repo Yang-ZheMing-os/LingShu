@@ -31,6 +31,25 @@ class CommandExecutor @Inject constructor(
         private const val APP_OPEN_DELAY_MS = 2000L
         /** 单步界面操作之间的延迟（毫秒） */
         private const val STEP_DELAY_MS = 800L
+        /** 滚动一屏的手势时长（毫秒） */
+        private const val DEFAULT_SCROLL_DURATION = 300
+        /** 滚动手势在屏幕边缘的内边距比例（避免触到系统手势区） */
+        private const val SCROLL_EDGE_MARGIN_RATIO = 0.2f
+    }
+
+    /**
+     * 根据包名获取应用在桌面上显示的名称（label）。找不到或异常时返回 null。
+     * 用于把 OpenApp 成功后的回复从包名还原成用户熟悉的应用名。
+     */
+    fun appDisplayName(packageName: String): String? {
+        if (packageName.isBlank()) return null
+        return try {
+            val pm = context.packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(appInfo)?.toString()?.trim()?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     suspend fun execute(command: Command): Result<Unit> {
@@ -42,6 +61,19 @@ class CommandExecutor @Inject constructor(
             is Command.Navigate -> systemControl.navigateToMap(command.destination)
             Command.OpenTakeout -> systemControl.openTakeout()
             is Command.AppAction -> executeAppAction(command)
+            // UI 自动化指令：直接委托无障碍服务，未启用时由各方法返回 ACCESSIBILITY_DISABLED
+            is Command.UiTap -> accessibilityControl.tap(command.x, command.y)
+            is Command.UiTapText -> accessibilityControl.tapByText(command.text)
+            is Command.UiSwipe -> accessibilityControl.swipe(
+                command.x1, command.y1, command.x2, command.y2, command.duration
+            )
+            is Command.UiScroll -> executeScroll(command.direction)
+            is Command.UiInputText -> accessibilityControl.inputText(command.text)
+            Command.UiPressBack -> accessibilityControl.pressBack()
+            Command.UiPressHome -> accessibilityControl.pressHome()
+            is Command.UiLongPress -> accessibilityControl.longPress(
+                command.x, command.y, command.durationMs
+            )
             is Command.Unknown -> Result.error(
                 code = "UNKNOWN_COMMAND",
                 message = "无法识别的指令: ${command.input}"
@@ -159,6 +191,52 @@ class CommandExecutor @Inject constructor(
 
         LingShuLog.i(TAG, "发送消息流程完成: contact=$contact, message=$message")
         return Result.success(Unit)
+    }
+
+    /**
+     * 按方向滚动一屏：基于屏幕尺寸计算滑动起止坐标。
+     *
+     * - UP：手指由下向上滑（内容上移，看下方内容）
+     * - DOWN：手指由上向下滑（内容下移，看上方内容）
+     * - LEFT/RIGHT：横向滑动
+     *
+     * 无障碍服务未启用时返回 [ErrorCodes.ACCESSIBILITY_DISABLED]。
+     */
+    private suspend fun executeScroll(direction: ScrollDirection): Result<Unit> {
+        if (!accessibilityControl.isServiceRunning()) {
+            return Result.error(
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
+            )
+        }
+        val metrics = context.resources.displayMetrics
+        val width = metrics.widthPixels
+        val height = metrics.heightPixels
+        val centerX = width / 2
+        val centerY = height / 2
+        val margin = SCROLL_EDGE_MARGIN_RATIO
+        return when (direction) {
+            ScrollDirection.UP -> accessibilityControl.swipe(
+                centerX, (height * (1 - margin)).toInt(),
+                centerX, (height * margin).toInt(),
+                DEFAULT_SCROLL_DURATION
+            )
+            ScrollDirection.DOWN -> accessibilityControl.swipe(
+                centerX, (height * margin).toInt(),
+                centerX, (height * (1 - margin)).toInt(),
+                DEFAULT_SCROLL_DURATION
+            )
+            ScrollDirection.LEFT -> accessibilityControl.swipe(
+                (width * (1 - margin)).toInt(), centerY,
+                (width * margin).toInt(), centerY,
+                DEFAULT_SCROLL_DURATION
+            )
+            ScrollDirection.RIGHT -> accessibilityControl.swipe(
+                (width * margin).toInt(), centerY,
+                (width * (1 - margin)).toInt(), centerY,
+                DEFAULT_SCROLL_DURATION
+            )
+        }
     }
 
     private suspend fun adjustBrightness(delta: Int): Result<Unit> {

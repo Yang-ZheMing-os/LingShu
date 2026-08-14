@@ -4,6 +4,7 @@ import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.feature.control.domain.Command
 import com.lingshu.feature.control.domain.ICommandParser
 import com.lingshu.feature.control.domain.ISystemControl
+import com.lingshu.feature.control.domain.ScrollDirection
 import com.lingshu.feature.control.domain.SystemAction
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,9 +18,11 @@ class CommandParserImpl @Inject constructor(
         val input = userInput.trim().lowercase()
         LingShuLog.d("CommandParser", "解析指令: $userInput")
 
-        // 预解析导航 / App 内操作（需提取参数），命中则直接返回
+        // 预解析导航 / App 内操作 / UI 自动化（需提取参数），命中则直接返回
         val navigate = parseNavigate(input)
         val appAction = parseAppAction(input)
+        val uiScroll = parseUiScroll(input)
+        val uiTapText = parseUiTapText(input)
 
         return when {
             isScreenshotCommand(input) -> Command.Screenshot
@@ -44,9 +47,17 @@ class CommandParserImpl @Inject constructor(
             isAutoRotateOnCommand(input) -> Command.SystemControl(SystemAction.AUTO_ROTATE_ON)
             isAutoRotateOffCommand(input) -> Command.SystemControl(SystemAction.AUTO_ROTATE_OFF)
 
+            // ===== UI 自动化（无障碍）：无参数指令优先级高，不会被"打开XX"误伤 =====
+            isUiPressBackCommand(input) -> Command.UiPressBack
+            isUiPressHomeCommand(input) -> Command.UiPressHome
+            uiScroll != null -> uiScroll
+
             navigate != null -> navigate
             isTakeoutCommand(input) -> Command.OpenTakeout
             appAction != null -> appAction
+
+            // "点击XX"放在外卖/AppAction 之后，避免"点外卖"被误解析为文本点击
+            uiTapText != null -> uiTapText
 
             else -> parseAppCommand(input) ?: Command.Unknown(userInput)
         }
@@ -134,6 +145,53 @@ class CommandParserImpl @Inject constructor(
     private fun isAutoRotateOffCommand(input: String): Boolean {
         return (input.contains("关闭") || input.contains("关掉")) &&
                (input.contains("自动旋转") || input.contains("旋转"))
+    }
+
+    // ===== UI 自动化指令解析（依赖无障碍服务） =====
+
+    /** "返回" / "后退" / "返回上一页" / "back" */
+    private fun isUiPressBackCommand(input: String): Boolean {
+        return input.contains("返回") || input.contains("后退") || input == "back"
+    }
+
+    /** "回到桌面" / "回桌面" / "回主屏" / "回主页" / "回主屏幕" / "home" */
+    private fun isUiPressHomeCommand(input: String): Boolean {
+        return input.contains("回到桌面") || input.contains("回桌面") ||
+               input.contains("回主屏") || input.contains("回主页") ||
+               input.contains("回主屏幕") || input == "home"
+    }
+
+    /**
+     * 解析滚动方向："上滑"/"向上滑"/"往上滑"/"向上滚动"/"上翻" 等。
+     * 词表覆盖"向X滑/X滑/向X滚动/X滚动/X翻"五种口语组合。返回 null 表示未命中。
+     */
+    private fun parseUiScroll(input: String): Command.UiScroll? {
+        val direction = when {
+            input.contains("上滑") || input.contains("上滚动") || input.contains("上翻") -> ScrollDirection.UP
+            input.contains("下滑") || input.contains("下滚动") || input.contains("下翻") -> ScrollDirection.DOWN
+            input.contains("左滑") || input.contains("左滚动") -> ScrollDirection.LEFT
+            input.contains("右滑") || input.contains("右滚动") -> ScrollDirection.RIGHT
+            else -> return null
+        }
+        // 仅当输入确实是"滑动/滚动/翻页"语义时才命中，避免"上滑屏幕截图"这类复合句误伤（暂按 contains 处理，保持简单）
+        return Command.UiScroll(direction)
+    }
+
+    /**
+     * 解析文本点击："点击XX" / "点一下XX" / "点按XX" / "按下XX"。
+     * 只用明确的动词词头，单字"点"不参与（"点外卖"等由 takeout/appAction 分支优先处理）。
+     */
+    private fun parseUiTapText(input: String): Command.UiTapText? {
+        val tailRegex = Regex("(一下|吧|了|可以吗|好吗|呗|啦|啊|哦|呀)\$")
+        for (verb in listOf("点击", "点一下", "点按", "按下", "按一下")) {
+            if (input.startsWith(verb)) {
+                val target = input.removePrefix(verb).replace(tailRegex, "").trim()
+                if (target.isNotEmpty()) {
+                    return Command.UiTapText(target)
+                }
+            }
+        }
+        return null
     }
 
     /**

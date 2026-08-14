@@ -1,4 +1,4 @@
-﻿package com.lingshu.core.common.event
+package com.lingshu.core.common.event
 
 import com.lingshu.core.common.di.MainDispatcher
 import com.lingshu.core.common.log.LingShuLog
@@ -120,6 +120,12 @@ class FloatingStateSyncer @Inject constructor(
                 LingShuLog.v(
                     "FloatingStateSyncer",
                     "[traceId=$traceId] ProactiveTriggered(type=${event.type}) → THINKING"
+                )
+            }
+            else -> currentState.also {
+                LingShuLog.v(
+                    "FloatingStateSyncer",
+                    "[traceId=$traceId] ${event::class.java.simpleName} → 保持 $it"
                 )
             }
         }

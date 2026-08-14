@@ -251,6 +251,160 @@ class AiReplyToControlBridgeTest {
         assertNotNull(command)
     }
 
+    // ==================== UI 自动化 action 映射测试 ====================
+
+    @Test
+    fun `mapToolCallToCommand_tap_返回UiTap命令`() {
+        val args = JSONObject().put("x", 100).put("y", 200)
+        val command = AiReplyToControlBridge.mapToolCallToCommand("tap", args)
+
+        assertTrue(command is Command.UiTap)
+        val tap = command as Command.UiTap
+        assertEquals(100, tap.x)
+        assertEquals(200, tap.y)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_tap_text_返回UiTapText命令`() {
+        val args = JSONObject().put("text", "发送")
+        val command = AiReplyToControlBridge.mapToolCallToCommand("tap_text", args)
+
+        assertTrue(command is Command.UiTapText)
+        assertEquals("发送", (command as Command.UiTapText).text)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_tap_text_空文本返回null`() {
+        val args = JSONObject().put("text", "")
+        val command = AiReplyToControlBridge.mapToolCallToCommand("tap_text", args)
+        assertNull("空文本不应产生指令", command)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_tap_text_缺少text参数返回null`() {
+        val command = AiReplyToControlBridge.mapToolCallToCommand("tap_text", JSONObject())
+        assertNull(command)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_swipe_返回UiSwipe命令并带默认duration`() {
+        val args = JSONObject()
+            .put("x1", 10).put("y1", 20)
+            .put("x2", 30).put("y2", 40)
+        val command = AiReplyToControlBridge.mapToolCallToCommand("swipe", args)
+
+        assertTrue(command is Command.UiSwipe)
+        val swipe = command as Command.UiSwipe
+        assertEquals(10, swipe.x1)
+        assertEquals(20, swipe.y1)
+        assertEquals(30, swipe.x2)
+        assertEquals(40, swipe.y2)
+        assertEquals(300, swipe.duration)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_swipe_指定duration透传`() {
+        val args = JSONObject()
+            .put("x1", 0).put("y1", 0).put("x2", 0).put("y2", 0)
+            .put("duration", 500)
+        val command = AiReplyToControlBridge.mapToolCallToCommand("swipe", args) as Command.UiSwipe
+        assertEquals(500, command.duration)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_scroll_四个方向映射正确`() {
+        assertEquals(
+            ScrollDirection.UP,
+            (AiReplyToControlBridge.mapToolCallToCommand("scroll", JSONObject().put("direction", "up")) as Command.UiScroll).direction
+        )
+        assertEquals(
+            ScrollDirection.DOWN,
+            (AiReplyToControlBridge.mapToolCallToCommand("scroll", JSONObject().put("direction", "down")) as Command.UiScroll).direction
+        )
+        assertEquals(
+            ScrollDirection.LEFT,
+            (AiReplyToControlBridge.mapToolCallToCommand("scroll", JSONObject().put("direction", "left")) as Command.UiScroll).direction
+        )
+        assertEquals(
+            ScrollDirection.RIGHT,
+            (AiReplyToControlBridge.mapToolCallToCommand("scroll", JSONObject().put("direction", "right")) as Command.UiScroll).direction
+        )
+    }
+
+    @Test
+    fun `mapToolCallToCommand_scroll_缺省方向默认DOWN`() {
+        val command = AiReplyToControlBridge.mapToolCallToCommand("scroll", JSONObject())
+        assertTrue(command is Command.UiScroll)
+        assertEquals(ScrollDirection.DOWN, (command as Command.UiScroll).direction)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_scroll_未知方向默认DOWN`() {
+        val command = AiReplyToControlBridge.mapToolCallToCommand(
+            "scroll", JSONObject().put("direction", "diagonal")
+        )
+        assertEquals(ScrollDirection.DOWN, (command as Command.UiScroll).direction)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_input_text_返回UiInputText命令`() {
+        val args = JSONObject().put("text", "你好")
+        val command = AiReplyToControlBridge.mapToolCallToCommand("input_text", args)
+
+        assertTrue(command is Command.UiInputText)
+        assertEquals("你好", (command as Command.UiInputText).text)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_input_text_空白文本返回null`() {
+        val command = AiReplyToControlBridge.mapToolCallToCommand(
+            "input_text", JSONObject().put("text", "   ")
+        )
+        assertNull(command)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_press_back_返回UiPressBack命令`() {
+        val command = AiReplyToControlBridge.mapToolCallToCommand("press_back", JSONObject())
+        assertTrue(command is Command.UiPressBack)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_press_home_返回UiPressHome命令`() {
+        val command = AiReplyToControlBridge.mapToolCallToCommand("press_home", JSONObject())
+        assertTrue(command is Command.UiPressHome)
+    }
+
+    @Test
+    fun `mapToolCallToCommand_long_press_返回UiLongPress命令并带默认duration`() {
+        val args = JSONObject().put("x", 50.0).put("y", 60.0)
+        val command = AiReplyToControlBridge.mapToolCallToCommand("long_press", args)
+
+        assertTrue(command is Command.UiLongPress)
+        val lp = command as Command.UiLongPress
+        assertEquals(50f, lp.x, 0.001f)
+        assertEquals(60f, lp.y, 0.001f)
+        assertEquals(500L, lp.durationMs)
+    }
+
+    @Test
+    fun `端到端_LLM回复含UI工具调用_解析并映射为UiTapText`() {
+        val llmReply = """好的，我帮您点击"发送"按钮。
+            [TOOL_CALL]{"action":"tap_text","args":{"text":"发送"}}[/TOOL_CALL]
+        """.trimIndent()
+
+        val toolCalls = AiReplyToControlBridge.parseToolCalls(llmReply)
+        assertEquals(1, toolCalls.size)
+
+        val json = toolCalls[0]
+        val command = AiReplyToControlBridge.mapToolCallToCommand(
+            json.optString("action").lowercase(),
+            json.optJSONObject("args") ?: JSONObject()
+        )
+        assertTrue(command is Command.UiTapText)
+        assertEquals("发送", (command as Command.UiTapText).text)
+    }
+
     // ==================== 端到端解析+映射联合测试 ====================
 
     @Test

@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lingshu.core.common.ToolCallCleaner
 import com.lingshu.core.ui.theme.OnPrimary
 import com.lingshu.core.ui.theme.Primary
 import com.lingshu.core.common.event.Message
@@ -79,9 +80,11 @@ fun ChatBubble(
                     // AI 思考中：三个跳动小圆点
                     TypingIndicator()
                 } else {
+                    // 显示前先剥掉 [TOOL_CALL]...[/TOOL_CALL] 标记，避免把 JSON 指令暴露给用户
+                    val cleanedContent = ToolCallCleaner.stripToolCallMarks(message.content)
                     // 统一用 AnnotatedString，流式时末尾追加着色光标 "▍"
                     val displayText = buildAnnotatedString {
-                        append(message.content)
+                        append(cleanedContent)
                         if (isStreaming) {
                             withStyle(SpanStyle(color = Primary)) {
                                 append(" ▍")

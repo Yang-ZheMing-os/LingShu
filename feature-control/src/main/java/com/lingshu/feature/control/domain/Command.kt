@@ -25,5 +25,40 @@ sealed class Command {
         val params: Map<String, String>
     ) : Command()
 
+    // ==================== UI 自动化指令（依赖无障碍服务） ====================
+
+    /** 点击指定坐标 */
+    data class UiTap(val x: Int, val y: Int) : Command()
+
+    /** 点击屏幕上文本/内容描述匹配的控件（控件名驱动，不依赖坐标） */
+    data class UiTapText(val text: String) : Command()
+
+    /** 从 (x1,y1) 滑动到 (x2,y2)，duration 毫秒 */
+    data class UiSwipe(
+        val x1: Int,
+        val y1: Int,
+        val x2: Int,
+        val y2: Int,
+        val duration: Int
+    ) : Command()
+
+    /** 按方向滚动一屏（基于屏幕尺寸自动计算滑动起止点） */
+    data class UiScroll(val direction: ScrollDirection) : Command()
+
+    /** 向当前焦点输入框输入文本 */
+    data class UiInputText(val text: String) : Command()
+
+    /** 按返回键 */
+    data object UiPressBack : Command()
+
+    /** 按 Home 键 */
+    data object UiPressHome : Command()
+
+    /** 在 (x,y) 长按 durationMs 毫秒 */
+    data class UiLongPress(val x: Float, val y: Float, val durationMs: Long) : Command()
+
     data class Unknown(val input: String) : Command()
 }
+
+/** 滚动方向 */
+enum class ScrollDirection { UP, DOWN, LEFT, RIGHT }

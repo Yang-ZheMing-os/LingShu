@@ -1,5 +1,7 @@
 package com.lingshu.feature.guide.presentation
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Accessibility
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Info
@@ -40,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,9 +52,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -91,11 +99,26 @@ fun SettingsScreen(
     LingShuLog.i(SETTINGS_TAG, "SettingsScreen: composing")
     val apiKey by viewModel.apiKey.collectAsState()
     val ttsEnabled by viewModel.ttsEnabled.collectAsState()
+    val accessibilityEnabled by viewModel.accessibilityEnabled.collectAsState()
     val llmProvider by viewModel.llmProvider.collectAsState()
     val currentConfig by viewModel.currentConfig.collectAsState()
     val ollamaModels by viewModel.ollamaModels.collectAsState()
     val modelsLoading by viewModel.modelsLoading.collectAsState()
     val modelsError by viewModel.modelsError.collectAsState()
+
+    val context = LocalContext.current
+
+    // 从系统无障碍设置页返回时（ON_RESUME）刷新服务开启状态
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshAccessibilityStatus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
@@ -438,6 +461,67 @@ fun SettingsScreen(
             }
 
             item {
+                SettingsSection(title = "权限与服务") {
+                    GlassCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                LingShuLog.d(SETTINGS_TAG, "navigate to system accessibility settings")
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    )
+                                }.onFailure { e ->
+                                    LingShuLog.e(SETTINGS_TAG, "跳转无障碍设置失败", e)
+                                }
+                            },
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Accessibility,
+                                contentDescription = null,
+                                tint = if (accessibilityEnabled) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "无障碍服务 >",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                                Text(
+                                    text = if (accessibilityEnabled) {
+                                        "已开启 · 支持自动点击、滑动、输入等操作"
+                                    } else {
+                                        "未开启 · 点击前往系统设置开启「灵枢」"
+                                    },
+                                    fontSize = 13.sp,
+                                    color = if (accessibilityEnabled) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.error
+                                    },
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
                 SettingsSection(title = "功能模块") {
                     NavCard(
                         icon = Icons.Default.Book,
@@ -653,7 +737,8 @@ private fun SettingsItem(
 class SettingsViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
     private val ollamaProvider: com.lingshu.core.data.llm.OllamaProvider,
-    private val llmConfigStore: LlmConfigStore
+    private val llmConfigStore: LlmConfigStore,
+    private val accessibilityControl: com.lingshu.feature.accessibility.domain.IAccessibilityControl
 ) : ViewModel() {
 
     private val vmTag = "SettingsVM"
@@ -664,6 +749,10 @@ class SettingsViewModel @Inject constructor(
 
     private val _ttsEnabled = MutableStateFlow(true)
     val ttsEnabled: StateFlow<Boolean> = _ttsEnabled.asStateFlow()
+
+    // 无障碍服务是否已开启（用于设置页状态展示，ON_RESUME 时刷新）
+    private val _accessibilityEnabled = MutableStateFlow(false)
+    val accessibilityEnabled: StateFlow<Boolean> = _accessibilityEnabled.asStateFlow()
 
     // 当前选中的 Provider，来自 LlmConfigStore
     private val _llmProvider = MutableStateFlow(ModelProviderType.DEEPSEEK)
@@ -767,6 +856,15 @@ class SettingsViewModel @Inject constructor(
 
     fun toggleTts(enabled: Boolean) {
         _ttsEnabled.value = enabled
+    }
+
+    /** 查询无障碍服务当前状态（设置页 ON_RESUME / 点击入口时调用） */
+    fun refreshAccessibilityStatus() {
+        viewModelScope.launch {
+            val running = accessibilityControl.isServiceRunning()
+            LingShuLog.d(vmTag, "无障碍服务状态: $running")
+            _accessibilityEnabled.value = running
+        }
     }
 
     /**

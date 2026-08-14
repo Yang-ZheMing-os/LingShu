@@ -8,6 +8,7 @@ import com.lingshu.core.common.error.ErrorCodes
 import com.lingshu.core.common.error.Result
 import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.feature.control.domain.Command
+import com.lingshu.feature.control.domain.CommandExecutor
 import com.lingshu.feature.control.domain.ICommandParser
 import com.lingshu.feature.control.domain.ISystemControl
 import com.lingshu.feature.control.domain.SystemAction
@@ -23,7 +24,8 @@ import javax.inject.Inject
 class ControlViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val systemControl: ISystemControl,
-    private val commandParser: ICommandParser
+    private val commandParser: ICommandParser,
+    private val commandExecutor: CommandExecutor
 ) : ViewModel() {
 
     private val _controlState = MutableStateFlow<UiState<Unit>>(UiState.Idle)
@@ -65,6 +67,15 @@ class ControlViewModel @Inject constructor(
             Command.Screenshot -> systemControl.takeScreenshot()
             is Command.Navigate -> systemControl.navigateToMap(command.destination)
             Command.OpenTakeout -> systemControl.openTakeout()
+            // UI 自动化指令统一委托 CommandExecutor（复用无障碍服务调用逻辑）
+            is Command.UiTap,
+            is Command.UiTapText,
+            is Command.UiSwipe,
+            is Command.UiScroll,
+            is Command.UiInputText,
+            Command.UiPressBack,
+            Command.UiPressHome,
+            is Command.UiLongPress -> commandExecutor.execute(command)
             // App 内部操作依赖无障碍编排，仅在 AI 指令链路（CommandExecutor）中执行
             is Command.AppAction -> Result.error(
                 code = ErrorCodes.UNKNOWN_ERROR,

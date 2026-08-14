@@ -67,16 +67,27 @@ class PromptAssembler @Inject constructor(
 - brightness_up / brightness_down
 - auto_rotate_on / auto_rotate_off
 - take_screenshot
-- open_app: args={"app_name":"<\u540d\u79f0>","package_name":"<\u5305\u540d>"}
+
+界面自动化（需用户已开启无障碍服务，作用于当前前台应用；无障碍未开启时调用会失败）：
+- tap: args={"x":<int>,"y":<int>} 点击指定坐标
+- tap_text: args={"text":"<控件文字>"} 按控件文字/内容描述点击（优先使用，比坐标可靠）
+- swipe: args={"x1":<int>,"y1":<int>,"x2":<int>,"y2":<int>,"duration":<int>} 从(x1,y1)滑动到(x2,y2)
+- scroll: args={"direction":"up|down|left|right"} 按方向滚动一屏
+- input_text: args={"text":"<文本>"} 向当前焦点输入框输入文本（需先点击输入框使其获焦）
+- press_back: 无参数，按返回键
+- press_home: 无参数，按 Home 键
+- long_press: args={"x":<float>,"y":<float>,"duration":<long>} \u5728\u5750\u6807\u957f\u6309\u6307\u5b9a\u6beb\u79d2
+- open_app: args={"app_name":"<\u540d\u79f0>","package_name":"<\u53ef\u7a7a\u4e0d\u586b\uff0c\u670d\u52a1\u7aef\u4f1a\u81ea\u52a8\u6620\u5c04\u5305\u540d>"}
 - close_app: args={"app_name":"<\u540d\u79f0>"}
 - navigate: args={"destination":"<\u76ee\u7684\u5730\u540d\u79f0\u6216\u5730\u5740>"}
 - open_takeout: \u65e0\u53c2\u6570\uff0c\u6253\u5f00\u5916\u5356\u5e94\u7528
 
 \u89c4\u5219\uff1a
 1. \u4ec5\u5728\u7528\u6237\u660e\u786e\u8981\u6c42\u63a7\u5236\u7cfb\u7edf\u529f\u80fd\u65f6\u4f7f\u7528\u5de5\u5177\u8c03\u7528
-2. \u5de5\u5177\u8c03\u7528\u6807\u8bb0\u524d\u540e\u53ef\u4ee5\u6709\u6b63\u5e38\u6587\u5b57\u56de\u590d
+2. \u5de5\u5177\u8c03\u7528\u6807\u8bb0\u524d\u540e\u53ef\u4ee5\u6709\u6b63\u5e38\u6587\u5b57\u56de\u590d\uff0c\u4f46\u53e3\u6c14\u8981\u7b80\u6d01\uff0c\u7981\u7528\u8ffd\u95ee\u3001\u7981\u7528emoji\u3001\u7981\u7528\u8ba9\u7528\u6237\u201c\u968f\u65f6\u8bf4\u54e6\u201d\u8fd9\u7c7b\u586b\u996a\u8bdd
 3. \u4e00\u6b21\u56de\u590d\u53ef\u5305\u542b\u591a\u4e2a\u5de5\u5177\u8c03\u7528
 4. \u5982\u679c\u7528\u6237\u8bf7\u6c42\u4e0d\u660e\u786e\uff0c\u5148\u786e\u8ba4\u540e\u518d\u8c03\u7528
+5. \u6253\u5f00\u5e94\u7528\u65f6\uff0c\u6587\u5b57\u56de\u590d\u53ea\u9700\u4e00\u53e5\u7b80\u77ed\u7684\u786e\u8ba4\u8bed\u5373\u53ef\uff0c\u683c\u5f0f\uff1a\u201c<app_name>\u5e94\u7528\u5df2\u6253\u5f00\u201d\uff0c\u4e0d\u8981\u518d\u52a0\u5176\u4ed6\u52a0\u6cb9\u6216\u63d0\u793a
 """
     }
 
