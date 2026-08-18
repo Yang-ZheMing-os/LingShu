@@ -14,3 +14,11 @@ captures/
 *.log
 .tmp_models/
 agent_legacy_backup/
+
+# 临时调试产物
+a.xml
+ui.xml
+*.bak
+
+# STT 二进制依赖（AAR 39MB，走 Maven 仓库拉取，不入库）
+feature-stt/libs/

@@ -20,6 +20,10 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -50,6 +54,11 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            pickFirsts += setOf(
+                "**/libonnxruntime.so"
+            )
+        }
     }
 }
 
@@ -74,6 +83,9 @@ dependencies {
     implementation(project(":feature-update"))
     implementation(project(":feature-offlinestt"))
     implementation(project(":feature-offlinetts"))
+
+    // Sherpa-ONNX 本地 AAR（在 app 模块实际打包，供 feature-stt 编译期引用）
+    implementation(files(rootProject.file("feature-stt/libs/sherpa-onnx-1.12.24.aar")))
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

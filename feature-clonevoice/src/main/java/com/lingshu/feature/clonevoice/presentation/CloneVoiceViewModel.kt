@@ -199,4 +199,71 @@ class CloneVoiceViewModel @Inject constructor(
     fun resetPreviewState() {
         _previewState.value = UiState.Idle
     }
+
+    // ==================== Day2-2：音色库分享 ====================
+    private val _presetOperation = MutableStateFlow<UiState<String>>(UiState.Idle)
+    val presetOperation: StateFlow<UiState<String>> = _presetOperation.asStateFlow()
+
+    fun createCustomPreset(
+        name: String,
+        author: String,
+        description: String,
+        tags: List<String>,
+        voiceName: String?,
+        pitch: Float,
+        rate: Float
+    ) {
+        viewModelScope.launch {
+            _presetOperation.value = UiState.Loading
+            val result = cloneVoiceService.createCustomPreset(name, author, description, tags, voiceName, pitch, rate)
+            when (result) {
+                is Result.Success -> {
+                    loadVoices()
+                    applyVoice(result.data)
+                    _presetOperation.value = UiState.Success("创建成功: $name")
+                }
+                is Result.Error -> {
+                    _presetOperation.value = UiState.Error(result.code, result.message)
+                }
+            }
+        }
+    }
+
+    fun importPreset(file: File) {
+        viewModelScope.launch {
+            _presetOperation.value = UiState.Loading
+            val result = cloneVoiceService.importPreset(file)
+            when (result) {
+                is Result.Success -> {
+                    loadVoices()
+                    applyVoice(result.data)
+                    _presetOperation.value = UiState.Success("导入成功")
+                }
+                is Result.Error -> {
+                    _presetOperation.value = UiState.Error(result.code, result.message)
+                }
+            }
+        }
+    }
+
+    fun exportPreset(voiceId: String, targetFile: File, onDone: (File?) -> Unit) {
+        viewModelScope.launch {
+            _presetOperation.value = UiState.Loading
+            val result = cloneVoiceService.exportPreset(voiceId, targetFile)
+            when (result) {
+                is Result.Success -> {
+                    _presetOperation.value = UiState.Success("导出成功: ${result.data.name}")
+                    onDone(result.data)
+                }
+                is Result.Error -> {
+                    _presetOperation.value = UiState.Error(result.code, result.message)
+                    onDone(null)
+                }
+            }
+        }
+    }
+
+    fun resetPresetOperation() {
+        _presetOperation.value = UiState.Idle
+    }
 }

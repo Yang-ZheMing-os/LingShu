@@ -1,6 +1,7 @@
 package com.lingshu.feature.accessibility.data
 
 import android.graphics.Rect
+import android.os.Build
 import android.view.accessibility.AccessibilityNodeInfo
 import com.lingshu.core.common.error.Result
 import com.lingshu.core.common.error.ErrorCodes
@@ -336,6 +337,41 @@ class AccessibilityControlImpl @Inject constructor() : IAccessibilityControl {
         } catch (e: Exception) {
             LingShuLog.e(TAG, "long press failed: x=$x, y=$y", e)
             Result.Error(code = ErrorCodes.UNKNOWN_ERROR, message = "long press failed: ${e.message}", cause = e)
+        }
+    }
+
+    override suspend fun takeScreenshot(): Result<Unit> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            return Result.Error(
+                code = ErrorCodes.UNKNOWN_ERROR,
+                message = "截屏需要 Android 9 及以上系统"
+            )
+        }
+        if (!isServiceRunning()) {
+            return Result.Error(
+                code = ErrorCodes.ACCESSIBILITY_DISABLED,
+                message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
+            )
+        }
+        val service = LingShuAccessibilityService.getInstance() ?: return Result.Error(
+            code = ErrorCodes.ACCESSIBILITY_DISABLED,
+            message = ErrorCodes.getMessage(ErrorCodes.ACCESSIBILITY_DISABLED)
+        )
+        return suspendCancellableCoroutine { continuation ->
+            service.takeScreenshot { success ->
+                if (success) {
+                    LingShuLog.d(TAG, "截屏成功（系统已保存到相册）")
+                    continuation.resume(Result.Success(Unit))
+                } else {
+                    LingShuLog.e(TAG, "截屏失败")
+                    continuation.resume(
+                        Result.Error(
+                            code = ErrorCodes.UNKNOWN_ERROR,
+                            message = "截屏失败，请确保已开启无障碍服务且系统为 Android 9+"
+                        )
+                    )
+                }
+            }
         }
     }
 

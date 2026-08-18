@@ -15,4 +15,10 @@ interface IProactiveService {
      * 用于用户在设置页点「发送测试通知」按钮时秒出通知，验证权限/渠道/通知栏展示是否正常。
      */
     suspend fun sendTestNotificationNow(): Result<Unit>
+
+    /**
+     * 运行主动关怀全链路诊断（不发送通知），返回每一关的详细通过/失败情况，
+     * 给设置页「诊断卡片」展示，解决用户"开关打开了也没推送"但不知道卡在哪一步的问题。
+     */
+    suspend fun runDiagnostics(): ProactiveDiagnostics
 }

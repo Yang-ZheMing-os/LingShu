@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -50,6 +51,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemoryListScreen(
+    onBackClick: () -> Unit = {},
     viewModel: MemoryViewModel = hiltViewModel()
 ) {
     val shortTermMemories by viewModel.shortTermMemories.collectAsState()
@@ -65,6 +67,11 @@ fun MemoryListScreen(
         topBar = {
             TopAppBar(
                 title = { Text("记忆管理") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
                 actions = {
                     IconButton(onClick = { showClearDialog = true }) {
                         Icon(Icons.Default.Delete, contentDescription = "清空")

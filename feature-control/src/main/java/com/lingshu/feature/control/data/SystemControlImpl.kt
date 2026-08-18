@@ -1,27 +1,38 @@
 package com.lingshu.feature.control.data
 
 import android.content.ActivityNotFoundException
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.provider.AlarmClock
 import android.provider.Settings
+import android.app.SearchManager
 import android.view.WindowManager
 import com.lingshu.core.common.error.ErrorCodes
 import com.lingshu.core.common.error.Result
 import com.lingshu.core.common.log.LingShuLog
+import com.lingshu.feature.accessibility.domain.IAccessibilityControl
+import com.lingshu.feature.control.domain.ChatChannel
 import com.lingshu.feature.control.domain.ISystemControl
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class SystemControlImpl @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val accessibilityControl: IAccessibilityControl
 ) : ISystemControl {
 
     private val audioManager: AudioManager by lazy {
@@ -288,22 +299,16 @@ class SystemControlImpl @Inject constructor(
         timeoutMs = SYSTEM_CONTROL_TIMEOUT_MS
     ) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                Result.error(
-                    code = ErrorCodes.PERMISSION_DENIED,
-                    message = "截屏需要无障碍服务支持"
-                )
-            } else {
-                Result.error(
-                    code = ErrorCodes.UNKNOWN_ERROR,
-                    message = "当前系统版本不支持截屏"
-                )
+            val result = accessibilityControl.takeScreenshot()
+            if (result is Result.Success) {
+                LingShuLog.i("SystemControl", "截屏已触发，系统自动保存到相册")
             }
+            result
         } catch (e: Exception) {
             LingShuLog.e("SystemControl", "截屏失败", e)
             Result.error(
                 code = ErrorCodes.UNKNOWN_ERROR,
-                message = "截屏失败",
+                message = "截屏失败: ${e.message}",
                 cause = e
             )
         }
@@ -490,6 +495,370 @@ class SystemControlImpl @Inject constructor(
             return@withSystemControlTimeout meituan
         }
         openApp("me.ele")
+    }
+
+    override suspend fun webSearch(query: String): Result<Unit> = withSystemControlTimeout(
+        action = "网页搜索",
+        timeoutMs = OPEN_APP_TIMEOUT_MS
+    ) {
+        val encoded = Uri.encode(query)
+        // 优先尝试浏览器应用搜索
+        val intents = listOf(
+            Intent(Intent.ACTION_WEB_SEARCH).apply {
+                putExtra(SearchManager.QUERY, query)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            },
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.baidu.com/s?wd=$encoded")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            },
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$encoded")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        )
+        for (intent in intents) {
+            try {
+                context.startActivity(intent)
+                LingShuLog.i("SystemControl", "网页搜索: $query")
+                return@withSystemControlTimeout Result.success(Unit)
+            } catch (e: Exception) {
+                LingShuLog.d("SystemControl", "搜索 Intent 失败，尝试下一个: ${e.message}")
+            }
+        }
+        Result.error(
+            code = ErrorCodes.UNKNOWN_ERROR,
+            message = "未找到可用的浏览器或搜索应用"
+        )
+    }
+
+    override suspend fun playMusic(): Result<Unit> = withSystemControlTimeout(
+        action = "播放音乐",
+        timeoutMs = OPEN_APP_TIMEOUT_MS
+    ) {
+        // 优先尝试网易云音乐 deeplink
+        val deeplinks = listOf(
+            "orpheus://widget/music?action=play",
+            "qqmusic://qq.com/open/player?action=play"
+        )
+        for (deeplink in deeplinks) {
+            if (tryStartActivity(Uri.parse(deeplink))) {
+                LingShuLog.i("SystemControl", "通过 deeplink 播放音乐: $deeplink")
+                return@withSystemControlTimeout Result.success(Unit)
+            }
+        }
+        // fallback: 打开第一个找到的音乐 App
+        for (pkg in listOf("com.netease.cloudmusic", "com.tencent.qqmusic", "com.kugou.android")) {
+            val result = openApp(pkg)
+            if (result is Result.Success) {
+                return@withSystemControlTimeout result
+            }
+        }
+        Result.error(
+            code = ErrorCodes.UNKNOWN_ERROR,
+            message = "未找到音乐应用"
+        )
+    }
+
+    override suspend fun setAlarm(hour: Int?, minute: Int, label: String?): Result<Unit> = withSystemControlTimeout(
+        action = "设置闹钟",
+        timeoutMs = OPEN_APP_TIMEOUT_MS
+    ) {
+        try {
+            val intent = if (hour != null) {
+                Intent(AlarmClock.ACTION_SET_ALARM).apply {
+                    putExtra(AlarmClock.EXTRA_HOUR, hour)
+                    putExtra(AlarmClock.EXTRA_MINUTES, minute)
+                    putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+                    label?.let { putExtra(AlarmClock.EXTRA_MESSAGE, it) }
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            } else {
+                // 未指定时间，只打开时钟应用
+                Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+            context.startActivity(intent)
+            LingShuLog.i("SystemControl", "设置闹钟: ${hour ?: "打开闹钟列表"}:$minute")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            LingShuLog.w("SystemControl", "设置闹钟失败，尝试打开时钟应用", e)
+            openApp("com.android.deskclock")
+        }
+    }
+
+    override suspend fun openCamera(): Result<Unit> = withSystemControlTimeout(
+        action = "打开相机",
+        timeoutMs = OPEN_APP_TIMEOUT_MS
+    ) {
+        try {
+            val intent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            LingShuLog.i("SystemControl", "打开相机")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            LingShuLog.w("SystemControl", "打开相机失败，尝试相机应用", e)
+            openApp("com.android.camera")
+        }
+    }
+
+    override suspend fun makeCall(phoneNumberOrContact: String): Result<Unit> = withSystemControlTimeout(
+        action = "拨打电话",
+        timeoutMs = OPEN_APP_TIMEOUT_MS
+    ) {
+        try {
+            val uri = Uri.parse("tel:${Uri.encode(phoneNumberOrContact)}")
+            val intent = Intent(Intent.ACTION_DIAL, uri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            LingShuLog.i("SystemControl", "拨打电话: $phoneNumberOrContact")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            LingShuLog.e("SystemControl", "拨打电话失败", e)
+            Result.error(
+                code = ErrorCodes.UNKNOWN_ERROR,
+                message = "无法拨打电话: ${e.message}",
+                cause = e
+            )
+        }
+    }
+
+    override suspend fun sendSms(phoneNumberOrContact: String, message: String): Result<Unit> = withSystemControlTimeout(
+        action = "发送短信",
+        timeoutMs = OPEN_APP_TIMEOUT_MS
+    ) {
+        try {
+            val uri = Uri.parse("smsto:${Uri.encode(phoneNumberOrContact)}")
+            val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (message.isNotEmpty()) {
+                    putExtra("sms_body", message)
+                }
+            }
+            context.startActivity(intent)
+            LingShuLog.i("SystemControl", "发送短信: to=$phoneNumberOrContact, msg=$message")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            LingShuLog.e("SystemControl", "发送短信失败", e)
+            Result.error(
+                code = ErrorCodes.UNKNOWN_ERROR,
+                message = "无法发送短信: ${e.message}",
+                cause = e
+            )
+        }
+    }
+
+    // ========================================================================
+    //  三大复合场景（安全合规版：只做打开+预填，不做自动确认/支付/发送）
+    // ========================================================================
+
+    // ---------------- 1. 点外卖 ----------------
+    override suspend fun orderTakeout(
+        foodKeyword: String?,
+        restaurant: String?,
+        addressHint: String?
+    ): Result<Unit> = withSystemControlTimeout(
+        action = "点外卖",
+        timeoutMs = OPEN_APP_TIMEOUT_MS
+    ) {
+        val searchTerm = buildString {
+            if (!restaurant.isNullOrBlank()) append(restaurant)
+            if (!restaurant.isNullOrBlank() && !foodKeyword.isNullOrBlank()) append(" ")
+            if (!foodKeyword.isNullOrBlank()) append(foodKeyword)
+        }.trim()
+
+        LingShuLog.i("SystemControl",
+            "点外卖：restaurant=$restaurant, food=$foodKeyword, addr=$addressHint → 搜\"$searchTerm\"")
+
+        // ---- 优先美团外卖：deeplink 走搜索页 ----
+        val meituanSearch = "imeituan://www.meituan.com/food?search=${Uri.encode(searchTerm)}"
+        if (tryStartActivity(Uri.parse(meituanSearch))) {
+            LingShuLog.i("SystemControl", "打开美团外卖搜索：$searchTerm")
+            return@withSystemControlTimeout Result.success(Unit)
+        }
+        val meituanApp = openApp("com.sankuai.meituan.takeoutnew")   // 美团外卖独立包
+            .takeIf { it is Result.Success }
+            ?: openApp("com.sankuai.meituan")                           // 美团主App
+        if (meituanApp is Result.Success) {
+            return@withSystemControlTimeout meituanApp
+        }
+
+        // ---- 饿了么（阿里）：搜索 deeplink ----
+        val elemeSearch = "eleme://www.ele.me/search?q=${Uri.encode(searchTerm)}"
+        if (tryStartActivity(Uri.parse(elemeSearch))) {
+            LingShuLog.i("SystemControl", "打开饿了么搜索：$searchTerm")
+            return@withSystemControlTimeout Result.success(Unit)
+        }
+        val elemeApp = openApp("me.ele")
+        if (elemeApp is Result.Success) {
+            return@withSystemControlTimeout elemeApp
+        }
+
+        LingShuLog.w("SystemControl", "未安装美团外卖/饿了么，无法点外卖")
+        Result.error(
+            code = ErrorCodes.UNKNOWN_ERROR,
+            message = "请先安装美团外卖或饿了么 App"
+        )
+    }
+
+    // ---------------- 2. 给某人发消息（微信/QQ/短信） ----------------
+    override suspend fun sendChatMessage(
+        contactNameOrPhone: String,
+        message: String,
+        channel: ChatChannel
+    ): Result<Unit> = withSystemControlTimeout(
+        action = "发送聊天消息",
+        timeoutMs = OPEN_APP_TIMEOUT_MS
+    ) {
+        // 先尝试通过通讯录找手机号（没有 READ_CONTACTS 权限就跳过，仍然把联系人名传给App做搜索）
+        val maybePhone: String? = runCatching {
+            resolveContactPhone(contactNameOrPhone)
+        }.getOrNull()
+
+        val target = maybePhone ?: contactNameOrPhone
+
+        val channelOrder: List<ChatChannel> = when (channel) {
+            ChatChannel.UNKNOWN -> listOf(ChatChannel.WECHAT, ChatChannel.QQ, ChatChannel.SMS)
+            else -> listOf(channel)
+        }
+
+        for (ch in channelOrder) {
+            val ok = when (ch) {
+                ChatChannel.WECHAT -> openWeChatConversation(contactName = contactNameOrPhone,
+                    phone = maybePhone, prefillMessage = message)
+                ChatChannel.QQ     -> openQQConversation(contactNameOrPhone, maybePhone, message)
+                ChatChannel.SMS    -> {
+                    val r = sendSms(target, message)
+                    r is Result.Success
+                }
+                ChatChannel.UNKNOWN -> false
+            }
+            if (ok) {
+                LingShuLog.i("SystemControl",
+                    "sendChatMessage 成功：渠道=$ch, 联系人=$contactNameOrPhone")
+                return@withSystemControlTimeout Result.success(Unit)
+            }
+        }
+        LingShuLog.w("SystemControl", "sendChatMessage 所有渠道失败：contact=$contactNameOrPhone")
+        Result.error(
+            code = ErrorCodes.UNKNOWN_ERROR,
+            message = "未找到可用的通讯 App（微信/QQ/短信）"
+        )
+    }
+
+    /** 通过 ContentResolver 把 "我妈/张三/10086" 解析成真实手机号。没权限返回 null。 */
+    private fun resolveContactPhone(contactName: String): String? {
+        // 如果传进来本身就是纯数字手机号（≥7位），直接返回
+        if (Regex("""^\+?\d{7,}$""").matches(contactName.trim())) return contactName.trim()
+        return try {
+            val resolver = context.contentResolver
+            val uriPhone = android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+            val projection = arrayOf(
+                android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER,
+                android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+            )
+            val where = "${android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"
+            val args = arrayOf("%$contactName%")
+            resolver.query(uriPhone, projection, where, args, null)?.use { c ->
+                val colNum = c.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
+                while (c.moveToNext()) {
+                    val number = c.getString(colNum) ?: continue
+                    if (number.isNotBlank()) return number.replace("\\s|-".toRegex(), "")
+                }
+            }
+            null
+        } catch (e: SecurityException) {
+            LingShuLog.w("SystemControl", "resolveContactPhone 缺少 READ_CONTACTS 权限", e)
+            null
+        } catch (e: Exception) {
+            LingShuLog.w("SystemControl", "resolveContactPhone 失败", e)
+            null
+        }
+    }
+
+    /**
+     * 打开微信聊天页 + 预填消息。
+     *
+     * 微信官方不公开"打开指定好友聊天"deeplink，所以：
+     *  1. 如果有手机号 → 走 wx://dl/wepiao? 或直接打开微信 App；
+     *  2. 兜底：打开微信 Launcher Intent；
+     *  3. 把 prefillMessage 复制到系统剪贴板，给用户最方便的"粘贴即可发送"体验；
+     *  ⚠️ 不会做无障碍自动粘贴+发送（合规：人工点击后才能发）。
+     */
+    private suspend fun openWeChatConversation(contactName: String, phone: String?, prefillMessage: String): Boolean {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        if (prefillMessage.isNotBlank()) {
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("lingshu_prefill", prefillMessage))
+        }
+
+        // 已知公开的 deeplink 入口：wx://dl/wechat 直接打开（打开微信主界面）
+        val deeplinks = buildList {
+            if (!phone.isNullOrBlank()) {
+                // 手机号通讯录添加联系人页（有一定概率跳到个人）
+                add("wx://dl/hy?url=${Uri.encode("https://weixin.qq.com/")}")
+            }
+            add("weixin://dl/wechat")
+        }
+        for (d in deeplinks) {
+            if (tryStartActivity(Uri.parse(d))) {
+                return true
+            }
+        }
+        val r = openApp("com.tencent.mm")
+        return r is Result.Success
+    }
+
+    /** 打开 QQ（mqqapi），优先跳好友聊天页，兜底直接打开 App；剪贴板预填消息 */
+    private suspend fun openQQConversation(contactName: String, phone: String?, prefillMessage: String): Boolean {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        if (prefillMessage.isNotBlank()) {
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("lingshu_prefill", prefillMessage))
+        }
+        // mqqapi://card/show_pslcard? 只支持已知 QQ号(uin)，一般拿不到，所以兜底直接打开
+        if (tryStartActivity(Uri.parse("mqqapi://im/home/launcher"))) return true
+        val r = openApp("com.tencent.mobileqq")
+        return r is Result.Success
+    }
+
+    // ---------------- 3. 打车 ----------------
+    override suspend fun callRide(
+        destination: String,
+        carTypePref: String?
+    ): Result<Unit> = withSystemControlTimeout(
+        action = "打车",
+        timeoutMs = OPEN_APP_TIMEOUT_MS
+    ) {
+        val encodedDest = Uri.encode(destination)
+        LingShuLog.i("SystemControl", "打车：dest=$destination, carType=$carTypePref")
+
+        // 1) 滴滴出行 deeplink：https://mo.didiglobal.com/openDoc 支持 d 目的地
+        val didi = "diditaxi://page/onekeyhailing?toAddressTitle=$encodedDest"
+        if (tryStartActivity(Uri.parse(didi))) {
+            return@withSystemControlTimeout Result.success(Unit)
+        }
+        val didiPkg = openApp("com.sdu.didi.psnger")
+        if (didiPkg is Result.Success) return@withSystemControlTimeout didiPkg
+
+        // 2) 高德出租车（高德打车）deeplink
+        val amapTaxi = "amapuri://taxi/callTaxi?destname=$encodedDest&dev=0"
+        if (tryStartActivity(Uri.parse(amapTaxi))) return@withSystemControlTimeout Result.success(Unit)
+
+        // 3) 百度地图打车
+        val baiduTaxi = "baidumap://map/taxi?destination=$encodedDest"
+        if (tryStartActivity(Uri.parse(baiduTaxi))) return@withSystemControlTimeout Result.success(Unit)
+
+        // 4) 兜底：地图 App 打开目的地，用户在地图内自己打车
+        val mapFallback = navigateToMap(destination)
+        if (mapFallback is Result.Success) {
+            return@withSystemControlTimeout mapFallback
+        }
+
+        Result.error(
+            code = ErrorCodes.UNKNOWN_ERROR,
+            message = "未安装滴滴/高德/百度地图等打车或地图 App"
+        )
     }
 
     /**

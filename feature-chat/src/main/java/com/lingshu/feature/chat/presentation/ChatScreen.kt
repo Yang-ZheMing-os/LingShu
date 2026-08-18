@@ -1,34 +1,57 @@
 package com.lingshu.feature.chat.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Brightness6
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -84,16 +107,19 @@ fun ChatScreen(
             )
         },
         bottomBar = {
-            MessageInput(
-                text = inputText,
-                onTextChange = { viewModel.updateInputText(it) },
-                onSend = { viewModel.sendMessage() },
-                ttsEnabled = ttsEnabled,
-                onToggleTts = { viewModel.toggleTts() },
-                isListening = isListening,
-                onToggleVoiceInput = { viewModel.toggleVoiceInput() },
-                enabled = !sendState.isLoading
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                QuickActionsBar(onClick = { text -> viewModel.sendQuickCommand(text) })
+                MessageInput(
+                    text = inputText,
+                    onTextChange = { viewModel.updateInputText(it) },
+                    onSend = { viewModel.sendMessage() },
+                    ttsEnabled = ttsEnabled,
+                    onToggleTts = { viewModel.toggleTts() },
+                    isListening = isListening,
+                    onToggleVoiceInput = { viewModel.toggleVoiceInput() },
+                    enabled = !sendState.isLoading
+                )
+            }
         },
         containerColor = Background,
         contentWindowInsets = WindowInsets(0)
@@ -238,4 +264,126 @@ private fun ErrorToast(
             fontSize = 14.sp
         )
     }
+}
+
+// ==============================================================================
+//  快捷指令按钮条：8 个最高频动作，横向可滚动，新手不用记口语
+// ==============================================================================
+
+private data class QuickAction(
+    val label: String,
+    val icon: ImageVector,
+    /** 填进输入框后交给 CommandParser 解析的文本（尽量用口语化表达） */
+    val commandText: String,
+    val tint: Color
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuickActionsBar(onClick: (String) -> Unit) {
+    val actions = remember {
+        listOf(
+            QuickAction(
+                label = "WiFi",
+                icon = Icons.Default.Wifi,
+                commandText = "打开WiFi",
+                tint = Color(0xFF3B82F6)
+            ),
+            QuickAction(
+                label = "调亮",
+                icon = Icons.Default.Brightness6,
+                commandText = "亮度太暗了",
+                tint = Color(0xFFF59E0B)
+            ),
+            QuickAction(
+                label = "音量",
+                icon = Icons.Default.VolumeUp,
+                commandText = "声音大点",
+                tint = Color(0xFF7C5CFF)
+            ),
+            QuickAction(
+                label = "截屏",
+                icon = Icons.Default.CameraAlt,
+                commandText = "截屏",
+                tint = Color(0xFF0EA5A0)
+            ),
+            QuickAction(
+                label = "拍照",
+                icon = Icons.Default.PhotoCamera,
+                commandText = "拍照",
+                tint = Color(0xFFEF4444)
+            ),
+            QuickAction(
+                label = "闹钟",
+                icon = Icons.Default.Alarm,
+                commandText = "设置闹钟",
+                tint = Color(0xFF6366F1)
+            ),
+            QuickAction(
+                label = "搜索",
+                icon = Icons.Default.Search,
+                commandText = "搜索",
+                tint = Color(0xFF14B8A6)
+            ),
+            QuickAction(
+                label = "音乐",
+                icon = Icons.Default.MusicNote,
+                commandText = "播放音乐",
+                tint = Color(0xFFEC4899)
+            )
+        )
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        ),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(actions, key = { it.label }) { a ->
+                QuickActionChip(action = a, onClick = { onClick(a.commandText) })
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuickActionChip(
+    action: QuickAction,
+    onClick: () -> Unit
+) {
+    SuggestionChip(
+        onClick = onClick,
+        label = {
+            Text(
+                text = action.label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        icon = {
+            Icon(
+                imageVector = action.icon,
+                contentDescription = null,
+                tint = action.tint,
+                modifier = Modifier.size(18.dp)
+            )
+        },
+        colors = SuggestionChipDefaults.suggestionChipColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
+            labelColor = OnBackground,
+            iconContentColor = action.tint
+        ),
+        shape = RoundedCornerShape(999.dp)
+    )
 }

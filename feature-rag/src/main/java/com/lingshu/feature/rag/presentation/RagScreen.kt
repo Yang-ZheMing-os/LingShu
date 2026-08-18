@@ -1,5 +1,9 @@
 package com.lingshu.feature.rag.presentation
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,13 +49,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.core.common.state.UiState
 import com.lingshu.core.ui.component.GlassCard
 import com.lingshu.feature.rag.domain.Chunk
 import com.lingshu.feature.rag.domain.Document
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -71,7 +78,18 @@ fun RagScreen(
     val askQuery by viewModel.askQuery.collectAsState()
 
     var showDeleteDialog by remember { mutableStateOf<Document?>(null) }
-    var showUploadDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val filePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val file = copyUriToCacheFile(context, uri)
+            if (file != null) {
+                viewModel.uploadDocument(file)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -83,8 +101,8 @@ fun RagScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showUploadDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "上传")
+                    IconButton(onClick = { filePicker.launch("text/*") }) {
+                        Icon(Icons.Default.Add, contentDescription = "上传文档")
                     }
                 }
             )
@@ -191,26 +209,6 @@ fun RagScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = null }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-
-    if (showUploadDialog) {
-        AlertDialog(
-            onDismissRequest = { showUploadDialog = false },
-            title = { Text("上传文档") },
-            text = { Text("请选择要上传的文档文件（支持 PDF、TXT、DOCX 等格式）。\n\n注意：这是演示版本，上传功能使用 Mock 数据。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showUploadDialog = false
-                }) {
-                    Text("选择文件")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showUploadDialog = false }) {
                     Text("取消")
                 }
             }
@@ -485,6 +483,24 @@ private fun SearchResultCard(
                 maxLines = 3
             )
         }
+    }
+}
+
+private fun copyUriToCacheFile(context: Context, uri: Uri): File? {
+    return try {
+        val fileName = uri.lastPathSegment?.substringAfterLast('/') ?: "upload_${System.currentTimeMillis()}.txt"
+        val safeName = if (fileName.length > 80) fileName.take(80) else fileName
+        val tempFile = File(context.cacheDir, "rag_upload_${System.currentTimeMillis()}_$safeName")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            tempFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        LingShuLog.d("RagScreen", "文件已复制到缓存: ${tempFile.absolutePath}, size=${tempFile.length()}")
+        tempFile
+    } catch (e: Exception) {
+        LingShuLog.e("RagScreen", "复制文件失败", e)
+        null
     }
 }
 

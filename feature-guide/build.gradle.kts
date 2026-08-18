@@ -47,6 +47,9 @@ dependencies {
     implementation(project(":feature-persona"))
     implementation(project(":feature-proactive"))
     implementation(project(":feature-accessibility"))
+    implementation(project(":feature-control"))
+    implementation(project(":feature-offlinetts"))
+    implementation(project(":feature-stt"))
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

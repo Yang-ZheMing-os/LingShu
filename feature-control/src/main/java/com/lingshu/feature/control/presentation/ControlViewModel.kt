@@ -67,6 +67,27 @@ class ControlViewModel @Inject constructor(
             Command.Screenshot -> systemControl.takeScreenshot()
             is Command.Navigate -> systemControl.navigateToMap(command.destination)
             Command.OpenTakeout -> systemControl.openTakeout()
+            is Command.WebSearch -> systemControl.webSearch(command.query)
+            Command.PlayMusic -> systemControl.playMusic()
+            is Command.SetAlarm -> systemControl.setAlarm(command.hour, command.minute, command.label)
+            Command.OpenCamera -> systemControl.openCamera()
+            is Command.MakeCall -> systemControl.makeCall(command.phoneNumberOrContact)
+            is Command.SendSms -> systemControl.sendSms(command.phoneNumberOrContact, command.message)
+            // ---------- 三大复合场景 ----------
+            is Command.OrderTakeout -> systemControl.orderTakeout(
+                foodKeyword = command.foodKeyword,
+                restaurant = command.restaurant,
+                addressHint = command.addressHint
+            )
+            is Command.SendChatMessage -> systemControl.sendChatMessage(
+                contactNameOrPhone = command.contactNameOrPhone,
+                message = command.message,
+                channel = command.channel
+            )
+            is Command.CallRide -> systemControl.callRide(
+                destination = command.destination,
+                carTypePref = command.carTypePref
+            )
             // UI 自动化指令统一委托 CommandExecutor（复用无障碍服务调用逻辑）
             is Command.UiTap,
             is Command.UiTapText,

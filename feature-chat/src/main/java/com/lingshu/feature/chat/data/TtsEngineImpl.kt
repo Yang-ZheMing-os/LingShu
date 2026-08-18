@@ -7,10 +7,13 @@ import com.lingshu.core.common.error.Result
 import com.lingshu.core.common.error.ErrorCodes
 import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.core.common.event.ITtsEngine
+import com.lingshu.core.data.datastore.AppPreferences
+import com.lingshu.feature.offlinetts.data.EdgeTtsEngine
 import com.lingshu.feature.offlinetts.data.OfflineTtsRouter
 import com.lingshu.feature.offlinetts.domain.OfflineTtsConfig
 import com.lingshu.feature.offlinetts.domain.OfflineTtsProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import java.util.Locale
@@ -21,7 +24,8 @@ import kotlin.coroutines.resume
 @Singleton
 class TtsEngineImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val offlineTtsRouter: OfflineTtsRouter
+    private val offlineTtsRouter: OfflineTtsRouter,
+    private val appPreferences: AppPreferences
 ) : ITtsEngine, TextToSpeech.OnInitListener {
 
     private val moduleTag = "ChatTTS"
@@ -52,10 +56,11 @@ class TtsEngineImpl @Inject constructor(
 
     private suspend fun ensureOfflineTtsLoaded(): Boolean {
         if (offlineTtsLoaded) return true
+        val voiceId = appPreferences.ttsVoiceId.first()
         val config = OfflineTtsConfig(
-            provider = OfflineTtsProvider.ANDROID_TTS,
+            provider = OfflineTtsProvider.EDGE_TTS_REMOTE_FALLBACK,
             modelDir = "",
-            voiceId = "default",
+            voiceId = voiceId,
             speed = 1.0f,
             sampleRate = 24000,
             format = "wav"
@@ -63,12 +68,35 @@ class TtsEngineImpl @Inject constructor(
         return when (val r = offlineTtsRouter.load(config, "tts_init")) {
             is Result.Success -> {
                 offlineTtsLoaded = true
-                LingShuLog.i(moduleTag, "EdgeTTS 加载成功（fallback 就绪）")
+                LingShuLog.i(moduleTag, "EdgeTTS 加载成功（voice=$voiceId）")
                 true
             }
             is Result.Error -> {
                 LingShuLog.e(moduleTag, "EdgeTTS 加载失败: ${r.message}")
                 false
+            }
+        }
+    }
+
+    /** 切换音色后重新加载 TTS 引擎配置 */
+    suspend fun reloadWithVoice(voiceId: String) {
+        offlineTtsRouter.unload()
+        offlineTtsLoaded = false
+        val config = OfflineTtsConfig(
+            provider = OfflineTtsProvider.EDGE_TTS_REMOTE_FALLBACK,
+            modelDir = "",
+            voiceId = voiceId,
+            speed = 1.0f,
+            sampleRate = 24000,
+            format = "wav"
+        )
+        when (val r = offlineTtsRouter.load(config, "tts_reload")) {
+            is Result.Success -> {
+                offlineTtsLoaded = true
+                LingShuLog.i(moduleTag, "TTS 音色切换成功: $voiceId")
+            }
+            is Result.Error -> {
+                LingShuLog.e(moduleTag, "TTS 音色切换失败: ${r.message}")
             }
         }
     }

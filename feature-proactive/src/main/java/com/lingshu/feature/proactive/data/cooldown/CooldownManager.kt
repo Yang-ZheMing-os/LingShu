@@ -2,6 +2,7 @@ package com.lingshu.feature.proactive.data.cooldown
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -80,6 +81,9 @@ class CooldownManager(private val context: Context) {
             p[CFG_QUIET_START_M] = config.quietHours.startMinute
             p[CFG_QUIET_END_H] = config.quietHours.endHour
             p[CFG_QUIET_END_M] = config.quietHours.endMinute
+            p[CFG_RANDOM_PROB] = config.randomTriggerProbability
+            p[CFG_QWEATHER_KEY] = config.qWeatherKey
+            p[CFG_QWEATHER_LOC] = config.qWeatherLocation
             TriggerType.values().forEach { t ->
                 p[stringPreferencesKey("cfg_trigger_${t.name}")] =
                     (config.triggers[t] ?: false).toString()
@@ -99,12 +103,18 @@ class CooldownManager(private val context: Context) {
         val qStartM = prefs[CFG_QUIET_START_M] ?: QuietHours().startMinute
         val qEndH = prefs[CFG_QUIET_END_H] ?: QuietHours().endHour
         val qEndM = prefs[CFG_QUIET_END_M] ?: QuietHours().endMinute
+        val randProb = prefs[CFG_RANDOM_PROB] ?: ProactiveConfig().randomTriggerProbability
+        val qwKey = prefs[CFG_QWEATHER_KEY] ?: ""
+        val qwLoc = prefs[CFG_QWEATHER_LOC] ?: "auto_ip"
         return ProactiveConfig(
             enabled = enabled,
             triggers = triggers,
             cooldownMinutes = cooldown,
             maxPerDay = maxPerDay,
-            quietHours = QuietHours(qStartH, qStartM, qEndH, qEndM)
+            quietHours = QuietHours(qStartH, qStartM, qEndH, qEndM),
+            randomTriggerProbability = randProb,
+            qWeatherKey = qwKey,
+            qWeatherLocation = qwLoc
         )
     }
 
@@ -128,5 +138,8 @@ class CooldownManager(private val context: Context) {
         private val CFG_QUIET_START_M = intPreferencesKey("cfg_quiet_start_m")
         private val CFG_QUIET_END_H = intPreferencesKey("cfg_quiet_end_h")
         private val CFG_QUIET_END_M = intPreferencesKey("cfg_quiet_end_m")
+        private val CFG_RANDOM_PROB = floatPreferencesKey("cfg_random_prob")
+        private val CFG_QWEATHER_KEY = stringPreferencesKey("cfg_qweather_key")
+        private val CFG_QWEATHER_LOC = stringPreferencesKey("cfg_qweather_loc")
     }
 }

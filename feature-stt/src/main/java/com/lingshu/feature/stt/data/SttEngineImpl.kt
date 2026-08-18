@@ -81,14 +81,19 @@ class SttEngineImpl @Inject constructor(
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val confidences = results?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
 
-            if (!matches.isNullOrEmpty() && confidences != null && confidences.isNotEmpty()) {
+            if (!matches.isNullOrEmpty()) {
                 val text = matches[0]
-                val confidence = confidences[0]
+                // 很多 OEM 不返回置信度，此时直接采用首个结果；返回了则用较低阈值
+                val confidence = if (confidences != null && confidences.isNotEmpty()) confidences[0] else 0.8f
 
                 LingShuLog.d("SttEngine", "识别结果: $text, 置信度: $confidence")
 
-                if (confidence >= CONFIDENCE_THRESHOLD) {
-                    onResultCallback?.invoke(SttResult(text = text, confidence = confidence))
+                if (confidence >= CONFIDENCE_THRESHOLD && text.isNotBlank()) {
+                    onResultCallback?.invoke(SttResult(text = text.trim(), confidence = confidence))
+                } else if (text.isNotBlank()) {
+                    // 置信度偏低但文本非空，仍然采用（口语指令场景宁滥勿缺）
+                    LingShuLog.w("SttEngine", "置信度偏低但仍采用: $confidence")
+                    onResultCallback?.invoke(SttResult(text = text.trim(), confidence = confidence))
                 } else {
                     onErrorCallback?.invoke(ErrorCodes.getMessage(ErrorCodes.STT_FAILED))
                 }
@@ -100,6 +105,10 @@ class SttEngineImpl @Inject constructor(
         }
 
         override fun onPartialResults(partialResults: Bundle?) {
+            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            if (!matches.isNullOrEmpty()) {
+                LingShuLog.d("SttEngine", "部分识别: ${matches[0]}")
+            }
         }
 
         override fun onEvent(eventType: Int, params: Bundle?) {
@@ -126,10 +135,17 @@ class SttEngineImpl @Inject constructor(
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.CHINESE.toString())
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000)
+                // 中文普通话：zh-CN 比 Locale.CHINESE ("zh") 在多数 OEM 上识别率更好
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "zh-CN")
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                // 允许离线引擎（部分国产 ROM 支持）
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                // 较短的静音判停，适合指令式短语
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
+                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 500)
             }
 
             speechRecognizer?.startListening(intent)
@@ -195,7 +211,8 @@ class SttEngineImpl @Inject constructor(
     }
 
     companion object {
-        private const val CONFIDENCE_THRESHOLD = 0.6f
-        private const val STT_TIMEOUT_MS = 5000L
+        // 口语指令场景降低阈值，且 OEM 不返回置信度时默认 0.8 直接采用
+        private const val CONFIDENCE_THRESHOLD = 0.3f
+        private const val STT_TIMEOUT_MS = 8000L
     }
 }

@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -36,7 +39,10 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.lingshu.feature.proactive.domain.CheckStep
+import com.lingshu.feature.proactive.domain.ProactiveDiagnostics
 import com.lingshu.feature.proactive.domain.QuietHours
+import com.lingshu.feature.proactive.domain.TriggerHitResult
 import com.lingshu.feature.proactive.domain.TriggerType
 import com.lingshu.core.ui.component.GlassCard
 
@@ -63,10 +69,13 @@ val triggerDescriptions = mapOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProactiveSettingsScreen(
+    onBackClick: () -> Unit = {},
     viewModel: ProactiveViewModel = hiltViewModel()
 ) {
     val config by viewModel.config.collectAsState()
     val status by viewModel.status.collectAsState()
+    val diagnostics by viewModel.diagnostics.collectAsState()
+    val diagnosticsRunning by viewModel.diagnosticsRunning.collectAsState()
     var showCooldownDialog by remember { mutableStateOf(false) }
     var showMaxPerDayDialog by remember { mutableStateOf(false) }
     var showQuietHoursDialog by remember { mutableStateOf(false) }
@@ -77,7 +86,12 @@ fun ProactiveSettingsScreen(
             .padding(16.dp)
     ) {
         TopAppBar(
-            title = { Text("主动关怀", fontWeight = FontWeight.Bold) }
+            title = { Text("主动关怀", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = onBackClick) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                }
+            }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -143,6 +157,21 @@ fun ProactiveSettingsScreen(
                 }
             }
 
+            // ========== 🔍 实时诊断卡片 ==========
+            item {
+                Text(
+                    text = "实时诊断",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                )
+                DiagnosticsCard(
+                    diagnostics = diagnostics,
+                    running = diagnosticsRunning,
+                    onRefresh = { viewModel.runDiagnostics() }
+                )
+            }
+
             item {
                 Text(
                     text = "触发条件",
@@ -158,6 +187,18 @@ fun ProactiveSettingsScreen(
                     enabled = config.triggers[triggerType] ?: true,
                     onToggle = { viewModel.toggleTrigger(triggerType, it) }
                 )
+            }
+
+            // Day3-3：雨天提醒专用配置（和风天气 Key + 位置）
+            item {
+                if ((config.triggers[TriggerType.RAINY_DAY] ?: true)) {
+                    RainyDayConfigCard(
+                        qWeatherKey = config.qWeatherKey,
+                        location = config.qWeatherLocation,
+                        onKeyChange = { viewModel.updateQWeatherKey(it) },
+                        onLocationChange = { viewModel.updateQWeatherLocation(it) }
+                    )
+                }
             }
 
             item {
@@ -299,6 +340,54 @@ fun TriggerItem(
     }
 }
 
+// ======================================================================
+//  Day3-3：雨天提醒配置卡片：和风天气 Key + 城市位置输入框
+// ======================================================================
+@Composable
+private fun RainyDayConfigCard(
+    qWeatherKey: String,
+    location: String,
+    onKeyChange: (String) -> Unit,
+    onLocationChange: (String) -> Unit
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "雨天带伞提醒配置",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "注册 https://dev.qweather.com 免费领 Key，" +
+                        "复制 Web API Key（非 SDK Key）粘贴到下面即可；" +
+                        "位置留空 = 根据 IP 自动定位。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+            )
+            OutlinedTextField(
+                value = qWeatherKey,
+                onValueChange = onKeyChange,
+                label = { Text("和风天气 Web API Key") },
+                placeholder = { Text("例如：a1b2c3d4e5f67890") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = if (location == "auto_ip") "" else location,
+                onValueChange = { raw ->
+                    onLocationChange(raw.ifBlank { "auto_ip" })
+                },
+                label = { Text("所在位置（城市 ID / 中文名称，留空=自动）") },
+                placeholder = { Text("例如：北京 / 101010100 / 上海") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
 @Composable
 fun SettingsItem(
     title: String,
@@ -329,6 +418,179 @@ fun SettingsItem(
             Text(
                 text = "›",
                 style = MaterialTheme.typography.titleMedium
+            )
+        }
+    }
+}
+
+// ======================================================================
+//  🔍 实时诊断卡片：显示 4 关状态 + 各 trigger 命中 + 最终结论
+// ======================================================================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DiagnosticsCard(
+    diagnostics: ProactiveDiagnostics?,
+    running: Boolean,
+    onRefresh: () -> Unit
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // 标题行 + 刷新按钮
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "🔍 主动关怀诊断器",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (diagnostics != null) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "当前时间 ${diagnostics.currentTimeText}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    if (diagnostics?.activeTimeWindows?.isNotEmpty() == true) {
+                        Text(
+                            text = diagnostics.activeTimeWindows.joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+                TextButton(onClick = onRefresh, enabled = !running) {
+                    Text(if (running) "诊断中…" else "重新诊断")
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            when {
+                running -> LoadingRow("正在运行 4 关检查 + 触发器命中判断…")
+                diagnostics == null -> LoadingRow("尚未生成诊断结果…")
+                else -> {
+                    // 第 1-3 关
+                    StepRow(title = "① 总开关", step = diagnostics.stepEnabled)
+                    StepRow(title = "② 静音时段", step = diagnostics.stepQuietHours)
+                    StepRow(title = "③ 冷却 / 当日上限", step = diagnostics.stepCooldown)
+
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "④ 各触发器命中",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    diagnostics.stepTriggers.forEach { (t, r) ->
+                        TriggerRow(trigger = t, result = r)
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    // 结论：不同 pass 情况用不同颜色
+                    val allPassed = diagnostics.stepEnabled.passed &&
+                                    diagnostics.stepQuietHours.passed &&
+                                    diagnostics.stepCooldown.passed
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (allPassed)
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                            else
+                                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = diagnostics.conclusion,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadingRow(text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "⏳ ",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun StepRow(title: String, step: CheckStep) {
+    Row(
+        modifier = Modifier.padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = if (step.passed) "✅" else "❌",
+            style = MaterialTheme.typography.titleSmall
+        )
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = step.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun TriggerRow(trigger: TriggerType, result: TriggerHitResult) {
+    Row(
+        modifier = Modifier.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        val icon = when {
+            !result.userEnabled -> "🔕"
+            result.ultimatelyPicked -> "🎯"
+            result.logicHit && result.filteredByProbability == true -> "⚖️"
+            result.logicHit -> "🟢"
+            else -> "⏭️"
+        }
+        Text(
+            text = icon,
+            style = MaterialTheme.typography.labelLarge
+        )
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = triggerDisplayNames[trigger] ?: trigger.name,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = result.detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

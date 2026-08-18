@@ -11,7 +11,7 @@ class PorcupineWakeWordEngine(
     private val context: Context,
     private val fallbackEngine: FallbackWakeWordEngine,
     private val accessKey: String? = null,
-    private val keyword: String = "Hey Google"
+    private val keyword: String = "灵枢灵枢"
 ) : IWakeWordEngine {
 
     private val listeners = mutableListOf<(WakeWordEvent) -> Unit>()

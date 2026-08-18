@@ -60,17 +60,78 @@ class EdgeTtsEngine @Inject constructor(
                     "(KHTML, like Gecko) Chrome/$CHROMIUM_MAJOR.0.0.0 Safari/537.36 Edg/$CHROMIUM_MAJOR.0.0.0"
 
         val VOICE_MAP = mapOf(
+            // ==== 中文普通话（女） ====
             "zh-CN-XiaoxiaoNeural"     to "zh-CN",
+            "zh-CN-XiaoyiNeural"       to "zh-CN",
+            "zh-CN-XiaochenNeural"     to "zh-CN",
+            "zh-CN-XiaohanNeural"      to "zh-CN",
+            "zh-CN-XiaomengNeural"     to "zh-CN",
+            "zh-CN-XiaomoNeural"       to "zh-CN",
+            "zh-CN-XiaoqiuNeural"      to "zh-CN",
+            "zh-CN-XiaoruiNeural"      to "zh-CN",
+            "zh-CN-XiaoshuangNeural"   to "zh-CN",
+            "zh-CN-XiaoxuanNeural"     to "zh-CN",
+            "zh-CN-XiaoyanNeural"      to "zh-CN",
+            "zh-CN-XiaozhenNeural"     to "zh-CN",
+            // ==== 中文普通话（男） ====
             "zh-CN-YunxiNeural"        to "zh-CN",
             "zh-CN-YunyangNeural"      to "zh-CN",
-            "zh-CN-XiaoyiNeural"       to "zh-CN",
             "zh-CN-YunjianNeural"      to "zh-CN",
+            "zh-CN-YunfengNeural"      to "zh-CN",
+            "zh-CN-YunhaoNeural"       to "zh-CN",
+            "zh-CN-YunxiaNeural"       to "zh-CN",
+            "zh-CN-YunyeNeural"        to "zh-CN",
+            // ==== 方言/其他中文 ====
             "zh-HK-HiuGaaiNeural"      to "zh-HK",
+            "zh-HK-HiuMaanNeural"      to "zh-HK",
+            "zh-HK-WanLungNeural"      to "zh-HK",
             "zh-TW-HsiaoChenNeural"    to "zh-TW",
+            "zh-TW-HsiaoYuNeural"      to "zh-TW",
+            "zh-TW-YunJheNeural"       to "zh-TW",
+            // ==== 英语/日语/韩语 ====
             "en-US-AriaNeural"         to "en-US",
             "en-US-GuyNeural"          to "en-US",
+            "en-US-JennyNeural"        to "en-US",
             "ja-JP-NanamiNeural"       to "ja-JP",
-            "ko-KR-SunHiNeural"        to "ko-KR"
+            "ja-JP-KeitaNeural"        to "ja-JP",
+            "ko-KR-SunHiNeural"        to "ko-KR",
+            "ko-KR-InJoonNeural"       to "ko-KR"
+        )
+
+        /** 音色显示名（中文名 + 性别 + 风格），用于设置页选择 */
+        val VOICE_DISPLAY_NAMES = mapOf(
+            "zh-CN-XiaoxiaoNeural"     to "晓晓 · 女声 · 温暖亲切",
+            "zh-CN-XiaoyiNeural"       to "晓伊 · 女声 · 活泼甜美",
+            "zh-CN-XiaochenNeural"     to "晓辰 · 女声 · 知性大方",
+            "zh-CN-XiaohanNeural"      to "晓涵 · 女声 · 沉稳温柔",
+            "zh-CN-XiaomengNeural"     to "晓梦 · 女声 · 柔和治愈",
+            "zh-CN-XiaomoNeural"       to "晓墨 · 女声 · 知性内敛",
+            "zh-CN-XiaoqiuNeural"      to "晓秋 · 女声 · 温暖成熟",
+            "zh-CN-XiaoruiNeural"      to "晓睿 · 女声 · 资深稳重",
+            "zh-CN-XiaoshuangNeural"   to "晓双 · 女童声 · 天真可爱",
+            "zh-CN-XiaoxuanNeural"     to "晓萱 · 女声 · 自信开朗",
+            "zh-CN-XiaoyanNeural"      to "晓颜 · 女声 · 亲切自然",
+            "zh-CN-XiaozhenNeural"     to "晓甄 · 女声 · 温柔细腻",
+            "zh-CN-YunxiNeural"        to "云希 · 男声 · 阳光少年",
+            "zh-CN-YunyangNeural"      to "云扬 · 男声 · 专业新闻",
+            "zh-CN-YunjianNeural"      to "云健 · 男声 · 磁性沉稳",
+            "zh-CN-YunfengNeural"      to "云枫 · 男声 · 热情爽朗",
+            "zh-CN-YunhaoNeural"       to "云浩 · 男声 · 温暖亲和",
+            "zh-CN-YunxiaNeural"       to "云夏 · 男童声 · 活泼可爱",
+            "zh-CN-YunyeNeural"        to "云野 · 男声 · 从容淡定",
+            "zh-HK-HiuGaaiNeural"      to "曉佳 · 粤语女声",
+            "zh-HK-HiuMaanNeural"      to "曉曼 · 粤语女声",
+            "zh-HK-WanLungNeural"      to "雲龍 · 粤语男声",
+            "zh-TW-HsiaoChenNeural"    to "曉臻 · 台湾女声",
+            "zh-TW-HsiaoYuNeural"      to "曉雨 · 台湾女声",
+            "zh-TW-YunJheNeural"       to "雲哲 · 台湾男声",
+            "en-US-AriaNeural"         to "Aria · English Female",
+            "en-US-GuyNeural"          to "Guy · English Male",
+            "en-US-JennyNeural"        to "Jenny · English Female",
+            "ja-JP-NanamiNeural"       to "七海 · 日本語女声",
+            "ja-JP-KeitaNeural"        to "圭太 · 日本語男声",
+            "ko-KR-SunHiNeural"        to "선희 · 한국어 여성",
+            "ko-KR-InJoonNeural"       to "인준 · 한국어 남성"
         )
 
         const val DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"

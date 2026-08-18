@@ -88,6 +88,12 @@ class AppPreferences(private val context: Context) {
             preferences[PERSONA_FORMALITY] ?: 0.5f
         }
 
+    /** Edge TTS 音色 ID，默认 zh-CN-XiaoxiaoNeural（晓晓，女声） */
+    val ttsVoiceId: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[TTS_VOICE_ID] ?: "zh-CN-XiaoxiaoNeural"
+        }
+
     suspend fun setFirstLaunch(isFirstLaunch: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[IS_FIRST_LAUNCH] = isFirstLaunch
@@ -144,6 +150,12 @@ class AppPreferences(private val context: Context) {
         }
     }
 
+    suspend fun setTtsVoiceId(voiceId: String) {
+        context.dataStore.edit { preferences ->
+            preferences[TTS_VOICE_ID] = voiceId
+        }
+    }
+
     suspend fun clear() {
         context.dataStore.edit { it.clear() }
     }
@@ -165,5 +177,7 @@ class AppPreferences(private val context: Context) {
         val PERSONA_ASSERTIVENESS = floatPreferencesKey("persona_assertiveness")
         val PERSONA_HUMOR = floatPreferencesKey("persona_humor")
         val PERSONA_FORMALITY = floatPreferencesKey("persona_formality")
+
+        private val TTS_VOICE_ID = stringPreferencesKey("tts_voice_id")
     }
 }

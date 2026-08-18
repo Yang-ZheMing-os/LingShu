@@ -3,9 +3,15 @@ package com.lingshu.feature.control.di
 import com.lingshu.core.common.event.ICommandSyncer
 import com.lingshu.feature.control.data.CommandParserImpl
 import com.lingshu.feature.control.data.SystemControlImpl
+import com.lingshu.feature.control.data.scenes.SceneExecutorImpl
+import com.lingshu.feature.control.data.scenes.SceneRepositoryImpl
+import com.lingshu.feature.control.data.scenes.SceneResolverImpl
 import com.lingshu.feature.control.domain.CommandSyncer
 import com.lingshu.feature.control.domain.ICommandParser
 import com.lingshu.feature.control.domain.ISystemControl
+import com.lingshu.feature.control.domain.scenes.ISceneRepository
+import com.lingshu.feature.control.domain.scenes.SceneExecutor
+import com.lingshu.feature.control.domain.scenes.SceneResolver
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -33,4 +39,22 @@ abstract class ControlModule {
     abstract fun bindCommandSyncer(
         syncer: CommandSyncer
     ): ICommandSyncer
+
+    @Binds
+    @Singleton
+    abstract fun bindSceneRepository(
+        impl: SceneRepositoryImpl
+    ): ISceneRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSceneResolver(
+        impl: SceneResolverImpl
+    ): SceneResolver
+
+    @Binds
+    @Singleton
+    abstract fun bindSceneExecutor(
+        impl: SceneExecutorImpl
+    ): SceneExecutor
 }

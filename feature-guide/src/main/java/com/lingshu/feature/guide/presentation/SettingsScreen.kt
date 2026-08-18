@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -68,6 +69,11 @@ import com.lingshu.core.data.llm.LlmConfig
 import com.lingshu.core.data.llm.LlmConfigStore
 import com.lingshu.core.data.llm.ModelProviderType
 import com.lingshu.core.ui.component.GlassCard
+import com.lingshu.feature.control.data.CustomCommandManager
+import com.lingshu.feature.control.domain.CustomCommand
+import com.lingshu.feature.offlinetts.data.EdgeTtsEngine
+import com.lingshu.feature.stt.data.ModelDownloadManager
+import com.lingshu.core.common.event.ISttEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,17 +100,20 @@ fun SettingsScreen(
     onNavigateToMemory: () -> Unit = {},
     onNavigateToPersona: () -> Unit = {},
     onNavigateToProactive: () -> Unit = {},
+    onNavigateToSceneManager: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     LingShuLog.i(SETTINGS_TAG, "SettingsScreen: composing")
     val apiKey by viewModel.apiKey.collectAsState()
     val ttsEnabled by viewModel.ttsEnabled.collectAsState()
+    val ttsVoiceId by viewModel.ttsVoiceId.collectAsState()
     val accessibilityEnabled by viewModel.accessibilityEnabled.collectAsState()
     val llmProvider by viewModel.llmProvider.collectAsState()
     val currentConfig by viewModel.currentConfig.collectAsState()
     val ollamaModels by viewModel.ollamaModels.collectAsState()
     val modelsLoading by viewModel.modelsLoading.collectAsState()
     val modelsError by viewModel.modelsError.collectAsState()
+    val customCommands by viewModel.customCommands.collectAsState()
 
     val context = LocalContext.current
 
@@ -457,6 +466,231 @@ fun SettingsScreen(
                             )
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    var voiceExpanded by remember { mutableStateOf(false) }
+                    val currentVoiceName = EdgeTtsEngine.VOICE_DISPLAY_NAMES[ttsVoiceId] ?: ttsVoiceId
+
+                    GlassCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { voiceExpanded = !voiceExpanded },
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.RecordVoiceOver,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(end = 16.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "TTS 音色",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                    Text(
+                                        text = currentVoiceName,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                                Text(
+                                    text = if (voiceExpanded) "收起" else "展开",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            if (voiceExpanded) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                HorizontalDivider()
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // 中文女声
+                                Text(
+                                    text = "中文女声",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                                EdgeTtsEngine.VOICE_DISPLAY_NAMES
+                                    .filter { it.key.startsWith("zh-CN-Xiao") }
+                                    .forEach { (voiceId, displayName) ->
+                                        VoiceOptionRow(
+                                            name = displayName,
+                                            selected = ttsVoiceId == voiceId,
+                                            onSelect = {
+                                                viewModel.setTtsVoice(voiceId)
+                                                voiceExpanded = false
+                                            }
+                                        )
+                                    }
+
+                                // 中文男声
+                                Text(
+                                    text = "中文男声",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                )
+                                EdgeTtsEngine.VOICE_DISPLAY_NAMES
+                                    .filter { it.key.startsWith("zh-CN-Yun") }
+                                    .forEach { (voiceId, displayName) ->
+                                        VoiceOptionRow(
+                                            name = displayName,
+                                            selected = ttsVoiceId == voiceId,
+                                            onSelect = {
+                                                viewModel.setTtsVoice(voiceId)
+                                                voiceExpanded = false
+                                            }
+                                        )
+                                    }
+
+                                // 方言
+                                val dialectVoices = EdgeTtsEngine.VOICE_DISPLAY_NAMES
+                                    .filter { it.key.startsWith("zh-HK") || it.key.startsWith("zh-TW") }
+                                if (dialectVoices.isNotEmpty()) {
+                                    Text(
+                                        text = "粤语 / 台湾",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                    )
+                                    dialectVoices.forEach { (voiceId, displayName) ->
+                                        VoiceOptionRow(
+                                            name = displayName,
+                                            selected = ttsVoiceId == voiceId,
+                                            onSelect = {
+                                                viewModel.setTtsVoice(voiceId)
+                                                voiceExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+
+                                // 外语
+                                val foreignVoices = EdgeTtsEngine.VOICE_DISPLAY_NAMES
+                                    .filter { !it.key.startsWith("zh-") }
+                                if (foreignVoices.isNotEmpty()) {
+                                    Text(
+                                        text = "外语",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                    )
+                                    foreignVoices.forEach { (voiceId, displayName) ->
+                                        VoiceOptionRow(
+                                            name = displayName,
+                                            selected = ttsVoiceId == voiceId,
+                                            onSelect = {
+                                                viewModel.setTtsVoice(voiceId)
+                                                voiceExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                SettingsSection(title = "语音识别模型") {
+                    val sttStatus by viewModel.sttStatus.collectAsState()
+                    val downloadProgress by viewModel.downloadProgress.collectAsState()
+                    val isDownloading = downloadProgress?.isDownloading == true
+
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.RecordVoiceOver,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(end = 16.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "SenseVoice 离线识别",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                    Text(
+                                        text = sttStatus,
+                                        fontSize = 12.sp,
+                                        color = if (sttStatus.startsWith("✓"))
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                            }
+
+                            if (isDownloading && downloadProgress != null) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                val prog = downloadProgress!!
+                                androidx.compose.material3.LinearProgressIndicator(
+                                    progress = { if (prog.totalBytes > 0) prog.downloadedBytes.toFloat() / prog.totalBytes else 0f },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Text(
+                                    text = "正在下载 ${prog.fileName}: ${"%.1f".format(prog.downloadedMB)}MB / ${"%.1f".format(prog.totalMB)}MB (${prog.percent}%)",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+
+                            downloadProgress?.error?.let { err ->
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "下载失败: $err",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            if (!sttStatus.startsWith("✓") && !isDownloading) {
+                                androidx.compose.material3.Button(
+                                    onClick = { viewModel.downloadSttModel() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("下载 SenseVoice 模型 (约 240MB)")
+                                }
+                                Text(
+                                    text = "下载后可离线使用，支持口语化识别、自动标点、情绪检测",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            } else if (isDownloading) {
+                                androidx.compose.material3.OutlinedButton(
+                                    onClick = { viewModel.cancelDownload() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("取消下载")
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -522,7 +756,145 @@ fun SettingsScreen(
             }
 
             item {
+                SettingsSection(title = "自定义指令（AES-256 加密存储）") {
+                    var aliasText by remember { mutableStateOf("") }
+                    var targetText by remember { mutableStateOf("") }
+
+                    Text(
+                        text = "把你日常的口语习惯映射为标准指令，例如「睡觉觉」→「我要睡了」",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+
+                    if (customCommands.isNotEmpty()) {
+                        customCommands.forEach { cmd ->
+                            GlassCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = cmd.alias,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onBackground
+                                        )
+                                        Text(
+                                            text = "→ ${cmd.target}",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                    androidx.compose.material3.TextButton(
+                                        onClick = { viewModel.removeCustomCommand(cmd.alias) }
+                                    ) {
+                                        Text("删除", fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    OutlinedTextField(
+                        value = aliasText,
+                        onValueChange = { aliasText = it },
+                        label = { Text("你的说法（别名）") },
+                        placeholder = { Text("如：睡觉觉") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground
+                        ),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = targetText,
+                        onValueChange = { targetText = it },
+                        label = { Text("对应标准指令") },
+                        placeholder = { Text("如：我要睡了、打开微信、太亮了") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground
+                        ),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    androidx.compose.material3.Button(
+                        onClick = {
+                            if (aliasText.isNotBlank() && targetText.isNotBlank()) {
+                                viewModel.addCustomCommand(aliasText, targetText)
+                                aliasText = ""
+                                targetText = ""
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("添加自定义指令")
+                    }
+                }
+            }
+
+            item {
                 SettingsSection(title = "功能模块") {
+                    NavCard(
+                        icon = Icons.Default.AutoAwesome,
+                        title = "🧩 通用场景（自定义/导入）",
+                        description = "AI 不只三个场景：查看内置 12 条、导入 JSON 新增自定义",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to SceneManager")
+                            onNavigateToSceneManager()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.AutoAwesome,
+                        title = "Mod 中心 / 导入（声明式 JSON）",
+                        description = "安装 Day2 声明式 Mod：manifest aliases/persona/quickActions",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to Mod")
+                            onNavigateToMod()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.RecordVoiceOver,
+                        title = "音色库分享（导入/导出 .voicepreset）",
+                        description = "Day2-2 音色库：不要录样本也能分享 TTS 音色参数",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to CloneVoice(音色库)")
+                            onNavigateToCloneVoice()
+                        }
+                    )
+                    NavCard(
+                        icon = Icons.Default.Info,
+                        title = "☔ 雨天提醒（和风天气 Key 配置）",
+                        description = "Day3-3 主动关怀：打开雨天提醒、输入 API Key/Location",
+                        onClick = {
+                            LingShuLog.d(SETTINGS_TAG, "navigate to Proactive(雨天提醒)")
+                            onNavigateToProactive()
+                        }
+                    )
                     NavCard(
                         icon = Icons.Default.Book,
                         title = "RAG 知识库",
@@ -732,13 +1104,42 @@ private fun SettingsItem(
     }
 }
 
+@Composable
+private fun VoiceOptionRow(
+    name: String,
+    selected: Boolean,
+    onSelect: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect() }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        androidx.compose.material3.RadioButton(
+            selected = selected,
+            onClick = onSelect
+        )
+        Text(
+            text = name,
+            fontSize = 13.sp,
+            color = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onBackground
+        )
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
     private val ollamaProvider: com.lingshu.core.data.llm.OllamaProvider,
     private val llmConfigStore: LlmConfigStore,
-    private val accessibilityControl: com.lingshu.feature.accessibility.domain.IAccessibilityControl
+    private val accessibilityControl: com.lingshu.feature.accessibility.domain.IAccessibilityControl,
+    private val customCommandManager: CustomCommandManager,
+    private val modelDownloadManager: ModelDownloadManager,
+    private val sttEngine: ISttEngine
 ) : ViewModel() {
 
     private val vmTag = "SettingsVM"
@@ -750,9 +1151,19 @@ class SettingsViewModel @Inject constructor(
     private val _ttsEnabled = MutableStateFlow(true)
     val ttsEnabled: StateFlow<Boolean> = _ttsEnabled.asStateFlow()
 
+    private val _ttsVoiceId = MutableStateFlow(EdgeTtsEngine.DEFAULT_VOICE)
+    val ttsVoiceId: StateFlow<String> = _ttsVoiceId.asStateFlow()
+
     // 无障碍服务是否已开启（用于设置页状态展示，ON_RESUME 时刷新）
     private val _accessibilityEnabled = MutableStateFlow(false)
     val accessibilityEnabled: StateFlow<Boolean> = _accessibilityEnabled.asStateFlow()
+
+    // STT 引擎状态
+    private val _sttStatus = MutableStateFlow("检测中...")
+    val sttStatus: StateFlow<String> = _sttStatus.asStateFlow()
+
+    // 模型下载进度
+    val downloadProgress = modelDownloadManager.downloadProgress
 
     // 当前选中的 Provider，来自 LlmConfigStore
     private val _llmProvider = MutableStateFlow(ModelProviderType.DEEPSEEK)
@@ -772,6 +1183,9 @@ class SettingsViewModel @Inject constructor(
     private val _modelsError = MutableStateFlow<String?>(null)
     val modelsError: StateFlow<String?> = _modelsError.asStateFlow()
 
+    // 用户自定义指令（AES256 加密存储）
+    val customCommands: StateFlow<List<CustomCommand>> = customCommandManager.commands
+
     init {
         LingShuLog.i(vmTag, "init: SettingsViewModel created")
 
@@ -779,6 +1193,25 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             appPreferences.apiKey.collect { key ->
                 _apiKey.value = key
+            }
+        }
+
+        // TTS 音色偏好
+        viewModelScope.launch {
+            appPreferences.ttsVoiceId.collect { voice ->
+                _ttsVoiceId.value = voice
+            }
+        }
+
+        // 检查 STT 引擎状态
+        checkSttStatus()
+
+        // 监听下载进度，下载完成后刷新状态
+        viewModelScope.launch {
+            modelDownloadManager.downloadProgress.collect { progress ->
+                if (progress?.isComplete == true) {
+                    checkSttStatus()
+                }
             }
         }
 
@@ -858,6 +1291,37 @@ class SettingsViewModel @Inject constructor(
         _ttsEnabled.value = enabled
     }
 
+    fun setTtsVoice(voiceId: String) {
+        _ttsVoiceId.value = voiceId
+        viewModelScope.launch {
+            appPreferences.setTtsVoiceId(voiceId)
+        }
+    }
+
+    private fun checkSttStatus() {
+        viewModelScope.launch {
+            val ready = modelDownloadManager.isModelReady()
+            val sizeMB = modelDownloadManager.getModelFileSize() / (1024f * 1024f)
+            _sttStatus.value = if (ready) {
+                "✓ SenseVoice 已就绪 (${"%.0f".format(sizeMB)}MB)"
+            } else {
+                "未部署，将使用系统语音识别（建议下载以获得更好的口语化识别效果）"
+            }
+        }
+    }
+
+    fun downloadSttModel() {
+        viewModelScope.launch {
+            LingShuLog.i(vmTag, "开始下载 SenseVoice 模型")
+            modelDownloadManager.downloadAll()
+        }
+    }
+
+    fun cancelDownload() {
+        modelDownloadManager.cancelDownload()
+        checkSttStatus()
+    }
+
     /** 查询无障碍服务当前状态（设置页 ON_RESUME / 点击入口时调用） */
     fun refreshAccessibilityStatus() {
         viewModelScope.launch {
@@ -889,5 +1353,13 @@ class SettingsViewModel @Inject constructor(
             }
             _modelsLoading.value = false
         }
+    }
+
+    fun addCustomCommand(alias: String, target: String) {
+        customCommandManager.addCommand(alias, target)
+    }
+
+    fun removeCustomCommand(alias: String) {
+        customCommandManager.removeCommand(alias)
     }
 }

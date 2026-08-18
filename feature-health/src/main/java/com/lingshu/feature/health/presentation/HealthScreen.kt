@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
@@ -53,6 +54,7 @@ import com.lingshu.feature.health.domain.SleepData
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HealthScreen(
+    onBackClick: () -> Unit = {},
     onNavigateToCommunity: () -> Unit = {},
     viewModel: HealthViewModel = hiltViewModel()
 ) {
@@ -76,6 +78,11 @@ fun HealthScreen(
         topBar = {
             TopAppBar(
                 title = { Text("健康数据") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
                 actions = {
                     IconButton(onClick = onNavigateToCommunity) {
                         Icon(Icons.Default.Notifications, contentDescription = "社区")

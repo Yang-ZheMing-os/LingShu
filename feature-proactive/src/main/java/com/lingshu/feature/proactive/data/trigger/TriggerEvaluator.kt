@@ -8,13 +8,33 @@ import android.hardware.SensorManager
 import com.lingshu.core.common.log.LingShuLog
 import com.lingshu.feature.proactive.domain.QuietHours
 import com.lingshu.feature.proactive.domain.TriggerType
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 import java.util.Calendar
+import java.util.concurrent.atomic.AtomicReference
 
 class TriggerEvaluator(private val context: Context) {
 
     companion object {
         private const val TAG = "ProactiveEval"
+        // 和风天气代码 3xx=雨、4xx=雪、1xx=多云风、0xx=晴；触发提醒：雪/雨/雷暴
+        private val RAINY_CODE_PREFIXES: Set<String> = setOf("3", "4")
+        // 301-318 / 401-457 都是雨雪，雷暴前缀也在 3xx
+        private const val CACHE_TTL_MS = 3600_000L
     }
+
+    data class WeatherCache(
+        val key: String,
+        val location: String,
+        val rainy: Boolean,
+        val expiresAtMs: Long
+    )
+
+    private val weatherCache = AtomicReference<WeatherCache?>(null)
 
     private val sensorManager: SensorManager? by lazy {
         context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
@@ -55,7 +75,8 @@ class TriggerEvaluator(private val context: Context) {
         }
     }
 
-    fun evaluate(triggers: Map<TriggerType, Boolean>): TriggerType? {
+    fun evaluate(config: com.lingshu.feature.proactive.domain.ProactiveConfig): TriggerType? {
+        val triggers = config.triggers
         val now = Calendar.getInstance()
         val h = now.get(Calendar.HOUR_OF_DAY)
         val m = now.get(Calendar.MINUTE)
@@ -95,9 +116,13 @@ class TriggerEvaluator(private val context: Context) {
                     LingShuLog.d(TAG, "STRESS 检查：hrv=$currentHrv (>0.7=压力大)? $hit")
                     hit
                 }
-                TriggerType.RAINY_DAY -> false.also { LingShuLog.d(TAG, "RAINY_DAY: 未接入天气API，恒false") }
+                TriggerType.RAINY_DAY -> {
+                    val hit = checkRainyDay(config)
+                    LingShuLog.d(TAG, "RAINY_DAY: 今天有雨雪? $hit")
+                    hit
+                }
                 TriggerType.MEMORY -> false.also { LingShuLog.d(TAG, "MEMORY: 由外部模块处理，恒false") }
-                TriggerType.RANDOM -> checkRandomTrigger().also { LingShuLog.d(TAG, "RANDOM: 5%采样命中? $it") }
+                TriggerType.RANDOM -> checkRandomTrigger(config.randomTriggerProbability).also { LingShuLog.d(TAG, "RANDOM: ${(config.randomTriggerProbability * 100).toInt()}%采样命中? $it") }
             }
 
             if (triggered) {
@@ -216,9 +241,77 @@ class TriggerEvaluator(private val context: Context) {
         return false
     }
 
-    private fun checkRandomTrigger(): Boolean {
-        // Random care trigger - 5% base probability
-        return kotlin.random.Random.nextFloat() < 0.05f
+    private fun checkRandomTrigger(probability: Float): Boolean {
+        val p = probability.coerceIn(0f, 1f)
+        return kotlin.random.Random.nextFloat() < p
+    }
+
+    /**
+     * Day3-3：雨天提醒
+     *  1. qWeatherKey 为空 → 恒不命中（保留旧行为，用户没填 Key 就别浪费 API）
+     *  2. 调用和风天气「3日预报」接口，匹配今日是否为雨雪代码；1 小时进程内缓存
+     *     接口：https://devapi.qweather.com/v7/weather/3d?location=xxx&key=yyy
+     */
+    private fun checkRainyDay(config: com.lingshu.feature.proactive.domain.ProactiveConfig): Boolean {
+        val key = config.qWeatherKey.trim()
+        if (key.isEmpty()) {
+            LingShuLog.i(TAG, "RAINY_DAY: 用户未填和风天气 Key，跳过")
+            return false
+        }
+        val location = config.qWeatherLocation.trim().ifEmpty { "auto_ip" }
+
+        val cached = weatherCache.get()
+        val nowMs = System.currentTimeMillis()
+        if (cached != null && cached.key == key && cached.location == location && nowMs < cached.expiresAtMs) {
+            return cached.rainy
+        }
+
+        val rainy = runCatching { fetchRainyFromQWeather(key, location) }
+            .onFailure { LingShuLog.w(TAG, "RAINY_DAY: API 调用失败，按无雨处理", it) }
+            .getOrDefault(false)
+        weatherCache.set(WeatherCache(key, location, rainy, nowMs + CACHE_TTL_MS))
+        return rainy
+    }
+
+    private fun fetchRainyFromQWeather(key: String, location: String): Boolean {
+        val loc = URLEncoder.encode(location, "UTF-8")
+        val url = URL("https://devapi.qweather.com/v7/weather/3d?location=$loc&key=$key")
+        val conn = (url.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 8_000
+            readTimeout = 10_000
+            requestMethod = "GET"
+        }
+        val code = conn.responseCode
+        if (code != 200) {
+            LingShuLog.w(TAG, "RAINY_DAY: 和风天气返回 HTTP $code")
+            return false
+        }
+        val body = conn.inputStream.use { input ->
+            BufferedReader(InputStreamReader(input, Charsets.UTF_8)).readText()
+        }
+        val root = JSONObject(body)
+        val status = root.optString("code", "-1")
+        if (status != "200") {
+            LingShuLog.w(TAG, "RAINY_DAY: 和风天气业务状态码=$status body=${body.take(200)}")
+            return false
+        }
+        val daily = root.optJSONArray("daily") ?: return false
+        if (daily.length() == 0) return false
+        val today = daily.getJSONObject(0)
+        val textDay = today.optString("textDay", "")
+        val textNight = today.optString("textNight", "")
+        val codeDay = today.optString("iconDay", "")
+        val codeNight = today.optString("iconNight", "")
+        val rainKeywords = listOf("雨", "雪", "雷")
+        val keywordMatch = rainKeywords.any { it in textDay || it in textNight }
+        val codeMatch = listOf(codeDay, codeNight).any { c ->
+            c.isNotEmpty() && c.first().toString() in RAINY_CODE_PREFIXES
+        }
+        LingShuLog.i(
+            TAG,
+            "RAINY_DAY: textDay=$textDay textNight=$textNight codeDay=$codeDay codeNight=$codeNight → keywordMatch=$keywordMatch codeMatch=$codeMatch"
+        )
+        return keywordMatch || codeMatch
     }
 
     private fun isScreenOn(): Boolean {

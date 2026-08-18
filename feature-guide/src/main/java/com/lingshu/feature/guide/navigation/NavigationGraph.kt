@@ -1,4 +1,4 @@
-﻿package com.lingshu.feature.guide.navigation
+package com.lingshu.feature.guide.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
@@ -12,6 +12,7 @@ import com.lingshu.feature.guide.presentation.GuideScreen
 import com.lingshu.feature.guide.presentation.MainScreen
 import com.lingshu.feature.guide.presentation.PermissionQueueScreen
 import com.lingshu.feature.guide.presentation.SettingsScreen
+import com.lingshu.feature.guide.presentation.SceneManagerScreen
 import com.lingshu.feature.guide.presentation.settings.ModelSettingsScreen
 import com.lingshu.feature.mod.presentation.ModScreen
 import com.lingshu.feature.rag.presentation.RagScreen
@@ -38,6 +39,7 @@ sealed class GuideSection(val route: String) {
     object Memory : GuideSection("memory")
     object Persona : GuideSection("persona")
     object Proactive : GuideSection("proactive")
+    object SceneManager : GuideSection("scene_manager")
 }
 
 @Composable
@@ -100,6 +102,9 @@ fun GuideNavGraph(
                 },
                 onNavigateToProactive = {
                     navController.navigate(GuideSection.Proactive.route)
+                },
+                onNavigateToSceneManager = {
+                    navController.navigate(GuideSection.SceneManager.route)
                 }
             )
         }
@@ -143,6 +148,9 @@ fun GuideNavGraph(
                 },
                 onNavigateToProactive = {
                     navController.navigate(GuideSection.Proactive.route)
+                },
+                onNavigateToSceneManager = {
+                    navController.navigate(GuideSection.SceneManager.route)
                 }
             )
         }
@@ -176,19 +184,23 @@ fun GuideNavGraph(
         }
 
         composable(GuideSection.Health.route) {
-            HealthScreen()
+            HealthScreen(onBackClick = { navController.popBackStack() })
         }
 
         composable(GuideSection.Memory.route) {
-            MemoryListScreen()
+            MemoryListScreen(onBackClick = { navController.popBackStack() })
         }
 
         composable(GuideSection.Persona.route) {
-            PersonaScreen()
+            PersonaScreen(onBackClick = { navController.popBackStack() })
         }
 
         composable(GuideSection.Proactive.route) {
-            ProactiveSettingsScreen()
+            ProactiveSettingsScreen(onBackClick = { navController.popBackStack() })
+        }
+
+        composable(GuideSection.SceneManager.route) {
+            SceneManagerScreen(navController = navController)
         }
     }
 }

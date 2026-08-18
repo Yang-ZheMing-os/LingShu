@@ -1,0 +1,12 @@
+﻿{
+  "formatVersion": 1,
+  "name": "温柔讲解女声（Demo）",
+  "author": "LingShu Smoke Test",
+  "description": "edge-tts zh-CN-XiaoxiaoNeural，pitch+8%，rate-4%，用来验证 CloneVoiceScreen 的导入按钮。",
+  "tags": ["中文", "女声", "讲解"],
+  "voiceName": "zh-CN-XiaoxiaoNeural",
+  "pitch": 1.08,
+  "rate": 0.96,
+  "sampleBase64": null,
+  "createdAt": 1754000000000
+}

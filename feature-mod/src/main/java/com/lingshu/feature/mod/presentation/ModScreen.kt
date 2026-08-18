@@ -1,8 +1,10 @@
 package com.lingshu.feature.mod.presentation
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -29,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -43,7 +47,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lingshu.core.common.state.UiState
@@ -54,8 +60,52 @@ import com.lingshu.feature.mod.domain.PermissionLevel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.max
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * 简单的自动换行布局（替换实验性 FlowRow，避免 @OptIn 编译器报错）
+ */
+@Composable
+private fun WrapRow(
+    modifier: Modifier = Modifier,
+    horizontalGap: androidx.compose.ui.unit.Dp = 0.dp,
+    verticalGap: androidx.compose.ui.unit.Dp = 0.dp,
+    content: @Composable () -> Unit
+) {
+    Layout(content, modifier) { measurables, constraints ->
+        val hGapPx = horizontalGap.roundToPx()
+        val vGapPx = verticalGap.roundToPx()
+        val rowWidth = constraints.maxWidth
+        var x = 0
+        var y = 0
+        var lineHeight = 0
+        var widthSoFar = 0
+        val placeables = measurables.map { it.measure(Constraints()) }
+        val positions = mutableListOf<Pair<Int, Int>>()
+        placeables.forEach { p ->
+            val w = p.width
+            val needNext = x != 0 && x + w > rowWidth
+            if (needNext) {
+                x = 0
+                y += lineHeight + vGapPx
+                lineHeight = 0
+            }
+            positions.add(x to y)
+            x += w + hGapPx
+            lineHeight = max(lineHeight, p.height)
+            widthSoFar = max(widthSoFar, x - hGapPx)
+        }
+        val totalHeight = y + lineHeight
+        layout(widthSoFar.coerceAtLeast(0), totalHeight.coerceAtLeast(0)) {
+            placeables.forEachIndexed { i, p ->
+                val (px, py) = positions[i]
+                p.place(px, py)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ModScreen(
     onBackClick: () -> Unit = {},
@@ -312,6 +362,45 @@ private fun ModCard(
                 style = MaterialTheme.typography.bodyMedium
             )
 
+            // ========== 声明式能力清单（Day2-1：让用户一眼看到这个 Mod 不只是描述，还提供了什么） ==========
+            val hasDeclarative = mod.manifest.quickActions.isNotEmpty()
+                    || mod.manifest.aliases.isNotEmpty()
+                    || mod.manifest.promptSnippets.isNotEmpty()
+                    || mod.manifest.homeNavCards.isNotEmpty()
+                    || mod.manifest.personaPrompt != null
+            if (hasDeclarative) {
+                Spacer(modifier = Modifier.height(8.dp))
+                WrapRow(horizontalGap = 6.dp, verticalGap = 6.dp) {
+                    if (mod.manifest.quickActions.isNotEmpty()) {
+                        AssistChip("快捷动作 x${mod.manifest.quickActions.size}")
+                    }
+                    if (mod.manifest.aliases.isNotEmpty()) {
+                        AssistChip("指令别名 x${mod.manifest.aliases.size}")
+                    }
+                    if (mod.manifest.promptSnippets.isNotEmpty()) {
+                        AssistChip("RAG 片段 x${mod.manifest.promptSnippets.size}")
+                    }
+                    if (mod.manifest.homeNavCards.isNotEmpty()) {
+                        AssistChip("首页卡片 x${mod.manifest.homeNavCards.size}")
+                    }
+                    if (mod.manifest.personaPrompt != null) {
+                        AssistChip("人格加成")
+                    }
+                }
+                // 显示前 3 个快捷动作，点击可预览 canonical command
+                if (mod.manifest.quickActions.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    WrapRow(horizontalGap = 6.dp, verticalGap = 6.dp) {
+                        mod.manifest.quickActions.take(3).forEach { qa ->
+                            AssistChip(
+                                text = (qa.iconEmoji?.plus(" ") ?: "") + qa.label,
+                                onClick = { /* chat 页再真实点击发送；这里只预览 */ }
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(
@@ -421,6 +510,23 @@ private fun PermissionLevelBadge(level: PermissionLevel) {
             style = MaterialTheme.typography.labelSmall,
             color = color,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+        )
+    }
+}
+
+@Composable
+private fun AssistChip(text: String, onClick: () -> Unit = {}) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        border = null
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
 }

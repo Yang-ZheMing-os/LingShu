@@ -60,6 +60,27 @@ class CommandExecutor @Inject constructor(
             Command.Screenshot -> systemControl.takeScreenshot()
             is Command.Navigate -> systemControl.navigateToMap(command.destination)
             Command.OpenTakeout -> systemControl.openTakeout()
+            is Command.WebSearch -> systemControl.webSearch(command.query)
+            Command.PlayMusic -> systemControl.playMusic()
+            is Command.SetAlarm -> systemControl.setAlarm(command.hour, command.minute, command.label)
+            Command.OpenCamera -> systemControl.openCamera()
+            is Command.MakeCall -> systemControl.makeCall(command.phoneNumberOrContact)
+            is Command.SendSms -> systemControl.sendSms(command.phoneNumberOrContact, command.message)
+            // ----- 三大复合场景 -----
+            is Command.OrderTakeout -> systemControl.orderTakeout(
+                foodKeyword = command.foodKeyword,
+                restaurant = command.restaurant,
+                addressHint = command.addressHint
+            )
+            is Command.SendChatMessage -> systemControl.sendChatMessage(
+                contactNameOrPhone = command.contactNameOrPhone,
+                message = command.message,
+                channel = command.channel
+            )
+            is Command.CallRide -> systemControl.callRide(
+                destination = command.destination,
+                carTypePref = command.carTypePref
+            )
             is Command.AppAction -> executeAppAction(command)
             // UI 自动化指令：直接委托无障碍服务，未启用时由各方法返回 ACCESSIBILITY_DISABLED
             is Command.UiTap -> accessibilityControl.tap(command.x, command.y)

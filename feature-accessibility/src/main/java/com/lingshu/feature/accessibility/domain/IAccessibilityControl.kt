@@ -13,5 +13,6 @@ interface IAccessibilityControl {
     suspend fun findControlByText(text: String): Result<ControlInfo?>
     suspend fun findControlById(id: String): Result<ControlInfo?>
     suspend fun longPress(x: Float, y: Float, durationMs: Long = 500): Result<Unit>
+    suspend fun takeScreenshot(): Result<Unit>
     suspend fun isServiceRunning(): Boolean
 }

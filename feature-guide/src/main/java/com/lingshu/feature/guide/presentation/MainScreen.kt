@@ -38,6 +38,7 @@ fun MainScreen(
     onNavigateToMemory: () -> Unit = {},
     onNavigateToPersona: () -> Unit = {},
     onNavigateToProactive: () -> Unit = {},
+    onNavigateToSceneManager: () -> Unit = {},
     onNavigateToModelSettings: () -> Unit = {}
 ) {
     val items = listOf(
@@ -75,7 +76,8 @@ fun MainScreen(
                         onNavigateToHealth = onNavigateToHealth,
                         onNavigateToMemory = onNavigateToMemory,
                         onNavigateToPersona = onNavigateToPersona,
-                        onNavigateToProactive = onNavigateToProactive
+                        onNavigateToProactive = onNavigateToProactive,
+                        onNavigateToSceneManager = onNavigateToSceneManager
                     )
                 }
             }

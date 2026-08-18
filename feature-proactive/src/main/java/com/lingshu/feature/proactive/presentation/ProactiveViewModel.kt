@@ -4,10 +4,13 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lingshu.core.common.log.LingShuLog
+import com.lingshu.feature.proactive.domain.CheckStep
 import com.lingshu.feature.proactive.domain.IProactiveService
 import com.lingshu.feature.proactive.domain.ProactiveConfig
+import com.lingshu.feature.proactive.domain.ProactiveDiagnostics
 import com.lingshu.feature.proactive.domain.ProactiveStatus
 import com.lingshu.feature.proactive.domain.QuietHours
+import com.lingshu.feature.proactive.domain.TriggerHitResult
 import com.lingshu.feature.proactive.domain.TriggerType
 import com.lingshu.feature.proactive.worker.ProactiveCheckWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,10 +33,36 @@ class ProactiveViewModel @Inject constructor(
     private val _status = MutableStateFlow(ProactiveStatus())
     val status: StateFlow<ProactiveStatus> = _status.asStateFlow()
 
+    /** 诊断结果；null = 尚未运行诊断 */
+    private val _diagnostics = MutableStateFlow<ProactiveDiagnostics?>(null)
+    val diagnostics: StateFlow<ProactiveDiagnostics?> = _diagnostics.asStateFlow()
+
+    private val _diagnosticsRunning = MutableStateFlow(false)
+    val diagnosticsRunning: StateFlow<Boolean> = _diagnosticsRunning.asStateFlow()
+
     init {
         viewModelScope.launch {
             _config.value = proactiveService.getConfig()
             _status.value = proactiveService.getStatus()
+            // 首次进入主动关怀页自动跑一次诊断，让用户一进来就看见当前状态
+            runDiagnosticsInternal()
+        }
+    }
+
+    fun runDiagnostics() {
+        viewModelScope.launch { runDiagnosticsInternal() }
+    }
+
+    private suspend fun runDiagnosticsInternal() {
+        _diagnosticsRunning.value = true
+        try {
+            // 执行前刷新一次 status，让今日数/上次时间同步最新
+            _status.value = proactiveService.getStatus()
+            _diagnostics.value = proactiveService.runDiagnostics()
+        } catch (e: Exception) {
+            LingShuLog.e("ProactiveVM", "runDiagnostics 异常", e)
+        } finally {
+            _diagnosticsRunning.value = false
         }
     }
 
@@ -48,6 +77,7 @@ class ProactiveViewModel @Inject constructor(
                 proactiveService.stop()
             }
             _status.value = proactiveService.getStatus()
+            runDiagnosticsInternal()
         }
     }
 
@@ -58,6 +88,7 @@ class ProactiveViewModel @Inject constructor(
             val newConfig = _config.value.copy(triggers = newTriggers)
             _config.value = newConfig
             proactiveService.configure(newConfig)
+            runDiagnosticsInternal()
         }
     }
 
@@ -66,6 +97,7 @@ class ProactiveViewModel @Inject constructor(
             val newConfig = _config.value.copy(cooldownMinutes = minutes)
             _config.value = newConfig
             proactiveService.configure(newConfig)
+            runDiagnosticsInternal()
         }
     }
 
@@ -74,12 +106,30 @@ class ProactiveViewModel @Inject constructor(
             val newConfig = _config.value.copy(maxPerDay = max)
             _config.value = newConfig
             proactiveService.configure(newConfig)
+            runDiagnosticsInternal()
         }
     }
 
     fun updateQuietHours(quietHours: QuietHours) {
         viewModelScope.launch {
             val newConfig = _config.value.copy(quietHours = quietHours)
+            _config.value = newConfig
+            proactiveService.configure(newConfig)
+            runDiagnosticsInternal()
+        }
+    }
+
+    fun updateQWeatherKey(key: String) {
+        viewModelScope.launch {
+            val newConfig = _config.value.copy(qWeatherKey = key)
+            _config.value = newConfig
+            proactiveService.configure(newConfig)
+        }
+    }
+
+    fun updateQWeatherLocation(location: String) {
+        viewModelScope.launch {
+            val newConfig = _config.value.copy(qWeatherLocation = location.ifBlank { "auto_ip" })
             _config.value = newConfig
             proactiveService.configure(newConfig)
         }

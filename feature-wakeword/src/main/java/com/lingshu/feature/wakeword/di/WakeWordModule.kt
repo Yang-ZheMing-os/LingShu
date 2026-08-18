@@ -26,7 +26,7 @@ abstract class WakeWordModule {
     ): IWakeWordEngine
 
     companion object {
-        private const val DEFAULT_KEYWORD = "Hey Google"
+        private const val DEFAULT_KEYWORD = "灵枢灵枢"
 
         @Provides
         @Singleton

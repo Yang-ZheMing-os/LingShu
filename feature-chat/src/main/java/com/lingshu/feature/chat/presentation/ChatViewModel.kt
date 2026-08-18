@@ -179,8 +179,42 @@ class ChatViewModel @Inject constructor(
                                     "ChatViewModel",
                                     "$stepTag CommandSyncer 未命中（非控制类指令，沿用 LLM 回复）"
                                 )
+                                // Day3-1：如果 commandSyncer 判定为 Unknown，把相似示例追加到 AI 回复末尾
+                                val isUnknown = runCatching { commandSyncer.isUnknown(text) }
+                                    .onFailure { e ->
+                                        LingShuLog.w(
+                                            "ChatViewModel",
+                                            "$stepTag commandSyncer.isUnknown 异常",
+                                            e
+                                        )
+                                    }
+                                    .getOrDefault(false)
+                                LingShuLog.d(
+                                    "ChatViewModel",
+                                    "$stepTag Day3-1: isUnknown=$isUnknown"
+                                )
+                                val rewritten = if (isUnknown) {
+                                    val sims = commandSyncer.topSimilarSuggestions(text, limit = 5)
+                                    LingShuLog.d(
+                                        "ChatViewModel",
+                                        "$stepTag Day3-1: sims.size=${sims.size} head=${sims.take(3).joinToString(" | ")}"
+                                    )
+                                    if (sims.isNotEmpty()) {
+                                        val appendix = "\n\n💡 你也可以试试：\n" +
+                                                sims.joinToString("\n") { "  • $it" }
+                                        (rawReply + appendix).trim()
+                                    } else rawReply
+                                } else rawReply
+                                if (rewritten != rawReply) {
+                                    LingShuLog.i(
+                                        "ChatViewModel",
+                                        "$stepTag ✅ Day3-1: 已追加相似示例，重写最后一条 AI 回复（append 长度=${rewritten.length - rawReply.length}）"
+                                    )
+                                    chatRepository.rewriteLastAssistantMessage(rewritten)
+                                }
+                                val toSpeak = ToolCallCleaner.stripToolCallMarks(rewritten)
                                 if (_ttsEnabled.value && !result.data.isUser) {
-                                    speakMessage(ToolCallCleaner.stripToolCallMarks(rawReply))
+                                    speakMessage(toSpeak)
                                 }
                             }
                         }
@@ -248,6 +282,19 @@ class ChatViewModel @Inject constructor(
             ttsEngine.stop()
             chatRepository.clearMessages()
         }
+    }
+
+    /**
+     * 快捷指令按钮专用：跟 sendMessage 一样的完整事件/AI/控制链路，
+     * 但不需要先填输入框。用于 WiFi/亮度/截屏/闹钟等底部快捷按钮。
+     */
+    fun sendQuickCommand(commandText: String) {
+        val text = commandText.trim()
+        if (text.isEmpty() || _sendState.value.isLoading) return
+
+        // 把用户点的指令先填入输入框，再自动发送，视觉上有迹可循
+        _inputText.value = text
+        sendMessage()
     }
 
     fun toggleVoiceInput() {

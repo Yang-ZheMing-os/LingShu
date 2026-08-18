@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AlertDialog
@@ -58,6 +59,7 @@ import kotlin.math.sin
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PersonaScreen(
+    onBackClick: () -> Unit = {},
     viewModel: PersonaViewModel = hiltViewModel()
 ) {
     val currentPersona by viewModel.currentPersona.collectAsState()
@@ -72,6 +74,11 @@ fun PersonaScreen(
         topBar = {
             TopAppBar(
                 title = { Text("人格系统") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                    }
+                },
                 actions = {
                     IconButton(onClick = {
                         viewModel.generatePrompt()

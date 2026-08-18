@@ -329,6 +329,16 @@ class AiReplyToControlBridge @Inject constructor(
         Command.UiPressBack -> "\u5df2\u8fd4\u56de"
         Command.UiPressHome -> "\u5df2\u56de\u5230\u684c\u9762"
         is Command.UiLongPress -> "\u5df2\u957f\u6309\u5c4f\u5e55 (${command.x}, ${command.y})"
+        is Command.WebSearch -> "\u6b63\u5728\u641c\u7d22\uff1a${command.query}"
+        Command.PlayMusic -> "\u6b63\u5728\u64ad\u653e\u97f3\u4e50"
+        is Command.SetAlarm -> if (command.hour != null) "\u95f9\u949f\u5df2\u8bbe\u7f6e" else "\u5df2\u6253\u5f00\u95f9\u949f"
+        Command.OpenCamera -> "\u76f8\u673a\u5df2\u6253\u5f00"
+        is Command.MakeCall -> "\u6b63\u5728\u62e8\u6253\u7535\u8bdd"
+        is Command.SendSms -> "\u6b63\u5728\u53d1\u9001\u77ed\u4fe1"
+        // 三大复合场景：null = 交给 CommandSyncer.buildCanonicalReply 生成完整的合规文案
+        is Command.OrderTakeout,
+        is Command.SendChatMessage,
+        is Command.CallRide -> null
         is Command.AppAction, is Command.Unknown -> null
     }
 }

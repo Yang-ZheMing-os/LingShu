@@ -4,10 +4,15 @@ import android.content.Context
 import com.lingshu.core.common.error.ErrorCodes
 import com.lingshu.core.common.error.Result
 import com.lingshu.core.common.log.LingShuLog
+import com.lingshu.feature.mod.domain.AggregatedDeclarativeContent
 import com.lingshu.feature.mod.domain.IModService
 import com.lingshu.feature.mod.domain.Mod
+import com.lingshu.feature.mod.domain.ModAlias
+import com.lingshu.feature.mod.domain.ModHomeNav
 import com.lingshu.feature.mod.domain.ModInfo
 import com.lingshu.feature.mod.domain.ModManifest
+import com.lingshu.feature.mod.domain.ModPromptSnippet
+import com.lingshu.feature.mod.domain.ModQuickAction
 import com.lingshu.feature.mod.domain.PermissionLevel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
@@ -26,7 +31,7 @@ import java.util.zip.ZipInputStream
 import javax.inject.Inject
 
 // =============================================
-// 脚本引擎层 - 预留 QuickJS 接入
+// 脚本引擎层 - 预留 QuickJS 接入（声明式 Mod 不需 JS 引擎即可生效）
 // =============================================
 
 interface IScriptEngine {
@@ -35,6 +40,119 @@ interface IScriptEngine {
         context: Map<String, Any>,
         traceId: String = ""
     ): Result<Any>
+}
+
+/**
+ * 声明式 JSON 解析器（Day2-1 新增）
+ * 解析 manifest.json 里的 aliases / quickActions / personaPrompt / promptSnippets / homeNavCards，
+ * 不写一行 JS 就能让 Mod 提供：指令别名、聊天底部 Chip、RAG 提示词、首页导航卡片。
+ */
+class JsonModParser @Inject constructor() {
+
+    fun parseAliases(json: String): List<ModAlias> {
+        val outer = runCatching {
+            val regex = Regex(""""aliases"\s*:\s*(\[[\s\S]*?\])""")
+            val arr = regex.find(json)?.groupValues?.get(1) ?: return emptyList()
+            arr
+        }.getOrDefault("[]")
+        return parseObjectArray(outer).mapNotNull { obj ->
+            val keywords = extractJsonStringArray(obj, "keywords")
+            val cmd = extractJsonString(obj, "canonicalCommand") ?: return@mapNotNull null
+            if (keywords.isEmpty()) return@mapNotNull null
+            ModAlias(
+                keywords = keywords,
+                canonicalCommand = cmd,
+                description = extractJsonString(obj, "description")
+            )
+        }
+    }
+
+    fun parseQuickActions(json: String): List<ModQuickAction> {
+        val outer = Regex(""""quickActions"\s*:\s*(\[[\s\S]*?\])""").find(json)?.groupValues?.get(1)
+            ?: return emptyList()
+        return parseObjectArray(outer).mapNotNull { obj ->
+            val id = extractJsonString(obj, "id") ?: return@mapNotNull null
+            val label = extractJsonString(obj, "label") ?: return@mapNotNull null
+            val cmd = extractJsonString(obj, "command") ?: return@mapNotNull null
+            ModQuickAction(
+                id = id,
+                label = label,
+                iconEmoji = extractJsonString(obj, "iconEmoji"),
+                command = cmd,
+                description = extractJsonString(obj, "description"),
+                accentColor = extractJsonString(obj, "accentColor")
+            )
+        }
+    }
+
+    fun parsePromptSnippets(json: String): List<ModPromptSnippet> {
+        val outer = Regex(""""promptSnippets"\s*:\s*(\[[\s\S]*?\])""").find(json)?.groupValues?.get(1)
+            ?: return emptyList()
+        return parseObjectArray(outer).mapNotNull { obj ->
+            val triggers = extractJsonStringArray(obj, "triggerKeywords")
+            val content = extractJsonString(obj, "content") ?: return@mapNotNull null
+            if (triggers.isEmpty()) return@mapNotNull null
+            ModPromptSnippet(
+                triggerKeywords = triggers,
+                content = content,
+                title = extractJsonString(obj, "title")
+            )
+        }
+    }
+
+    fun parseHomeNavCards(json: String): List<ModHomeNav> {
+        val outer = Regex(""""homeNavCards"\s*:\s*(\[[\s\S]*?\])""").find(json)?.groupValues?.get(1)
+            ?: return emptyList()
+        return parseObjectArray(outer).mapNotNull { obj ->
+            val t = extractJsonString(obj, "title") ?: return@mapNotNull null
+            val d = extractJsonString(obj, "desc") ?: return@mapNotNull null
+            val c = extractJsonString(obj, "command") ?: return@mapNotNull null
+            ModHomeNav(t, d, c, extractJsonString(obj, "accentColor"))
+        }
+    }
+
+    fun parsePersonaPrompt(json: String): String? =
+        Regex(""""personaPrompt"\s*:\s*"((?:[^"\\]|\\.)*)"""").find(json)?.groupValues?.get(1)
+            ?.replace("\\\"", "\"")?.replace("\\\\", "\\")
+
+    // ============ 通用辅助 ============
+    private fun parseObjectArray(jsonArrayStr: String): List<String> {
+        val result = mutableListOf<String>()
+        var depth = 0
+        var start = -1
+        for (i in jsonArrayStr.indices) {
+            when (jsonArrayStr[i]) {
+                '{' -> {
+                    if (depth == 0) start = i
+                    depth++
+                }
+                '}' -> {
+                    depth--
+                    if (depth == 0 && start >= 0) {
+                        result.add(jsonArrayStr.substring(start, i + 1))
+                        start = -1
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    private fun extractJsonString(json: String, key: String): String? {
+        val regex = Regex(""""$key"\s*:\s*"((?:[^"\\]|\\.)*)"""")
+        val raw = regex.find(json)?.groupValues?.get(1) ?: return null
+        return raw.replace("\\\"", "\"").replace("\\\\", "\\")
+    }
+
+    private fun extractJsonStringArray(json: String, key: String): List<String> {
+        val result = mutableListOf<String>()
+        val regex = Regex(""""$key"\s*:\s*\[([^\]]*)\]""")
+        val match = regex.find(json)?.groupValues?.get(1) ?: return emptyList()
+        Regex(""""((?:[^"\\]|\\.)*)"""").findAll(match).forEach {
+            result.add(it.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\"))
+        }
+        return result
+    }
 }
 
 /**
@@ -119,6 +237,7 @@ interface IQuickJsEngine : IScriptEngine {
 
 class ModServiceImpl @Inject constructor(
     private val scriptEngine: IScriptEngine,
+    private val jsonParser: JsonModParser,
     @ApplicationContext private val context: Context
 ) : IModService {
 
@@ -499,7 +618,12 @@ class ModServiceImpl @Inject constructor(
                     mainScript = mainScript,
                     minAppVersion = minAppVersion,
                     permissions = permissions,
-                    permissionLevel = level
+                    permissionLevel = level,
+                    aliases = jsonParser.parseAliases(content),
+                    quickActions = jsonParser.parseQuickActions(content),
+                    promptSnippets = jsonParser.parsePromptSnippets(content),
+                    homeNavCards = jsonParser.parseHomeNavCards(content),
+                    personaPrompt = jsonParser.parsePersonaPrompt(content)
                 )
             )
         } catch (e: Exception) {
@@ -840,7 +964,12 @@ class ModServiceImpl @Inject constructor(
             permissions = extractJsonStringArray(text, "permissions"),
             permissionLevel = runCatching {
                 PermissionLevel.valueOf(extractJsonString(text, "permissionLevel") ?: PermissionLevel.NORMAL.name)
-            }.getOrDefault(PermissionLevel.NORMAL)
+            }.getOrDefault(PermissionLevel.NORMAL),
+            aliases = jsonParser.parseAliases(text),
+            quickActions = jsonParser.parseQuickActions(text),
+            promptSnippets = jsonParser.parsePromptSnippets(text),
+            homeNavCards = jsonParser.parseHomeNavCards(text),
+            personaPrompt = jsonParser.parsePersonaPrompt(text)
         )
     }
 
@@ -866,6 +995,31 @@ class ModServiceImpl @Inject constructor(
             idx = src.indexOf(key, idx + 1)
         }
         return count
+    }
+
+    // ==================== 声明式能力实现 ====================
+    override fun getDeclarativeContent(): AggregatedDeclarativeContent {
+        val enabled = installedMods.filter { it.enabled }
+        return AggregatedDeclarativeContent(
+            quickActions = enabled.flatMap { it.manifest.quickActions },
+            homeNavCards = enabled.flatMap { it.manifest.homeNavCards },
+            aliases = enabled.flatMap { it.manifest.aliases },
+            promptSnippets = enabled.flatMap { it.manifest.promptSnippets },
+            personaPrompts = enabled.mapNotNull { it.manifest.personaPrompt }
+        )
+    }
+
+    override fun resolveAlias(userInput: String): ModAlias? {
+        val content = getDeclarativeContent()
+        if (content.aliases.isEmpty()) return null
+        val lowered = userInput.trim().lowercase()
+        // 先整句匹配 → 再任意关键词包含匹配
+        content.aliases.firstOrNull { alias ->
+            alias.keywords.any { lowered == it.lowercase() }
+        }?.let { return it }
+        return content.aliases.firstOrNull { alias ->
+            alias.keywords.any { lowered.contains(it.lowercase()) }
+        }
     }
 
     companion object {

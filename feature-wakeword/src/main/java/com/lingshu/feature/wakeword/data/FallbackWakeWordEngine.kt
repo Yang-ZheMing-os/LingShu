@@ -20,7 +20,7 @@ import java.util.Locale
 
 class FallbackWakeWordEngine(
     private val context: Context,
-    private val keyword: String = "Hey Google"
+    private val keyword: String = "灵枢灵枢"
 ) : IWakeWordEngine {
 
     private val listeners = mutableListOf<(WakeWordEvent) -> Unit>()
@@ -144,7 +144,9 @@ class FallbackWakeWordEngine(
                 RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
             )
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "zh-CN")
+            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, "zh-CN")
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
         }

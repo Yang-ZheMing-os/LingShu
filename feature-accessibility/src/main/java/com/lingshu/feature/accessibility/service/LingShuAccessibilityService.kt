@@ -223,4 +223,20 @@ class LingShuAccessibilityService : AccessibilityService() {
         }
         return null
     }
+
+    fun takeScreenshot(callback: (Boolean) -> Unit) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val result = performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT)
+                LingShuLog.i(TAG, "触发系统截屏: result=$result")
+                callback(result)
+            } else {
+                LingShuLog.w(TAG, "截屏需要 Android 9+ (API 28)")
+                callback(false)
+            }
+        } catch (e: Exception) {
+            LingShuLog.e(TAG, "截屏异常", e)
+            callback(false)
+        }
+    }
 }

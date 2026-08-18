@@ -143,35 +143,35 @@ class CloneVoiceServiceImpl @Inject constructor(
         val modelDir = File(dir, MODEL_DIR_NAME)
         val sampleFile = File(dir, SAMPLE_FILE_NAME)
 
-        // 检查必需文件
-        val allExist = metadataFile.exists() && modelDir.exists() && sampleFile.exists()
+        if (!metadataFile.exists()) {
+            LingShuLog.w(TAG, "[$traceId] [加载声音] voiceId=$voiceId 缺少 metadata，跳过")
+            return
+        }
         LingShuLog.d(TAG, "[$traceId] [加载声音] voiceId=$voiceId " +
-                "metadata=${metadataFile.exists()}, " +
+                "metadata=present, " +
                 "modelDir=${modelDir.exists()}, " +
                 "sample=${sampleFile.exists()}(${sampleFile.length()} bytes)")
 
-        if (!allExist) {
-            LingShuLog.w(TAG, "[$traceId] [加载声音] voiceId=$voiceId 文件不完整，跳过")
-            return
-        }
-
         // 读取 metadata
         val metadata = parseMetadata(metadataFile)
+        val tagsStr = parseNullableString(metadata["tags"])
         val voice = Voice(
             id = voiceId,
             name = (metadata["name"] as? String) ?: voiceId,
-            modelPath = modelDir.absolutePath,
-            samplePath = sampleFile.absolutePath,
-            createdAt = (metadata["createdAt"] as? Long) ?: dir.lastModified(),
-            // 用户录制的声音：无系统 Voice 名，使用默认 pitch/rate
+            modelPath = if (modelDir.exists()) modelDir.absolutePath else dir.absolutePath,
+            samplePath = if (sampleFile.exists()) sampleFile.absolutePath else "",
+            createdAt = parseLong(metadata["createdAt"]) ?: dir.lastModified(),
             voiceName = parseNullableString(metadata["voiceName"]),
             pitch = parseFloat(metadata["pitch"]) ?: 1.0f,
             rate = parseFloat(metadata["rate"]) ?: 1.0f,
-            isSystemVoice = parseBoolean(metadata["isSystemVoice"])
+            isSystemVoice = parseBoolean(metadata["isSystemVoice"]),
+            author = parseNullableString(metadata["author"]),
+            description = parseNullableString(metadata["description"]),
+            tags = if (tagsStr.isNullOrEmpty()) emptyList() else tagsStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         )
         voices.add(voice)
         LingShuLog.d(TAG, "[$traceId] [加载声音] 成功 voiceId=$voiceId, name=${voice.name}, " +
-                "createdAt=${formatDate(voice.createdAt)}")
+                "tags=${voice.tags}, createdAt=${formatDate(voice.createdAt)}")
     }
 
     /**
@@ -879,6 +879,172 @@ class CloneVoiceServiceImpl @Inject constructor(
             bytes < 1024 * 1024 * 1024 -> "${"%.1f".format(bytes/1024.0/1024.0)} MB"
             else -> "${"%.2f".format(bytes/1024.0/1024.0/1024.0)} GB"
         }
+    }
+
+    // ==================== Day2-2：音色库分享（导入 / 导出 / 快捷创建） ====================
+    override suspend fun importPreset(file: File): Result<String> = withContext(Dispatchers.IO) {
+        val traceId = "imp_${System.currentTimeMillis()}"
+        LingShuLog.i(TAG, "[$traceId] importPreset: file=${file.absolutePath}")
+        val preset = runCatching { parsePresetJson(file.readText()) }.getOrElse { e ->
+            LingShuLog.e(TAG, "[$traceId] preset JSON 解析失败", e)
+            return@withContext Result.error(ErrorCodes.VOICE_CLONE_FAILED, "音色预设文件解析失败: ${e.message}")
+        }
+        val voiceId = "preset_" + UUID.randomUUID().toString().replace("-", "").take(12)
+        val voiceDir = File(voicesDir, voiceId).apply { mkdirs() }
+        val metadataFile = File(voiceDir, METADATA_FILE_NAME)
+        val metadata = mapOf(
+            "id" to voiceId,
+            "name" to preset.name,
+            "samplePath" to "",
+            "modelPath" to voiceDir.absolutePath,
+            "createdAt" to System.currentTimeMillis(),
+            "type" to "preset",
+            "voiceName" to (preset.voiceName ?: ""),
+            "pitch" to preset.pitch.toString(),
+            "rate" to preset.rate.toString(),
+            "isSystemVoice" to "false",
+            "author" to preset.author,
+            "description" to preset.description,
+            "tags" to preset.tags.joinToString(","),
+            "traceId" to traceId
+        )
+        writeMetadata(metadataFile, metadata)
+
+        val newVoice = Voice(
+            id = voiceId,
+            name = preset.name,
+            modelPath = voiceDir.absolutePath,
+            samplePath = "",
+            createdAt = System.currentTimeMillis(),
+            voiceName = preset.voiceName,
+            pitch = preset.pitch.coerceIn(0.5f, 2.0f),
+            rate = preset.rate.coerceIn(0.5f, 2.0f),
+            isSystemVoice = false,
+            author = preset.author,
+            description = preset.description,
+            tags = preset.tags
+        )
+        voices.add(newVoice)
+        LingShuLog.i(TAG, "[$traceId] 导入成功: id=$voiceId, 作者=${preset.author}")
+        Result.success(voiceId)
+    }
+
+    override suspend fun exportPreset(voiceId: String, targetFile: File): Result<File> = withContext(Dispatchers.IO) {
+        val traceId = "exp_${System.currentTimeMillis()}"
+        val voice = voices.find { it.id == voiceId }
+            ?: return@withContext Result.error(ErrorCodes.VOICE_CLONE_FAILED, "音色不存在: $voiceId")
+        val preset = com.lingshu.feature.clonevoice.domain.VoicePresetFile(
+            formatVersion = 1,
+            name = voice.name,
+            author = voice.author ?: "Anonymous",
+            description = voice.description ?: "",
+            tags = voice.tags,
+            voiceName = voice.voiceName,
+            pitch = voice.pitch,
+            rate = voice.rate,
+            sampleBase64 = null,
+            createdAt = voice.createdAt
+        )
+        runCatching {
+            targetFile.writeText(toPresetJson(preset))
+        }.onFailure { e ->
+            LingShuLog.e(TAG, "[$traceId] 导出失败", e)
+            return@withContext Result.error(ErrorCodes.VOICE_CLONE_FAILED, "导出失败: ${e.message}")
+        }
+        LingShuLog.i(TAG, "[$traceId] 导出成功: ${targetFile.absolutePath}")
+        Result.success(targetFile)
+    }
+
+    override suspend fun createCustomPreset(
+        name: String,
+        author: String,
+        description: String,
+        tags: List<String>,
+        voiceName: String?,
+        pitch: Float,
+        rate: Float
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val traceId = "cvp_${System.currentTimeMillis()}"
+        val voiceId = "custom_" + UUID.randomUUID().toString().replace("-", "").take(12)
+        val voiceDir = File(voicesDir, voiceId).apply { mkdirs() }
+        val metadataFile = File(voiceDir, METADATA_FILE_NAME)
+        val metadata = mapOf(
+            "id" to voiceId,
+            "name" to name,
+            "samplePath" to "",
+            "modelPath" to voiceDir.absolutePath,
+            "createdAt" to System.currentTimeMillis(),
+            "type" to "custom",
+            "voiceName" to (voiceName ?: ""),
+            "pitch" to pitch.toString(),
+            "rate" to rate.toString(),
+            "isSystemVoice" to "false",
+            "author" to author,
+            "description" to description,
+            "tags" to tags.joinToString(",")
+        )
+        writeMetadata(metadataFile, metadata)
+        val newVoice = Voice(
+            id = voiceId,
+            name = name,
+            modelPath = voiceDir.absolutePath,
+            samplePath = "",
+            createdAt = System.currentTimeMillis(),
+            voiceName = voiceName,
+            pitch = pitch.coerceIn(0.5f, 2.0f),
+            rate = rate.coerceIn(0.5f, 2.0f),
+            isSystemVoice = false,
+            author = author,
+            description = description,
+            tags = tags
+        )
+        voices.add(newVoice)
+        LingShuLog.i(TAG, "[$traceId] 创建自定义音色: id=$voiceId, name=$name")
+        Result.success(voiceId)
+    }
+
+    // ========== JSON 辅助（VoicePreset 手写解析/序列化，避免引入 Moshi 依赖） ==========
+    private fun parsePresetJson(json: String): com.lingshu.feature.clonevoice.domain.VoicePresetFile {
+        fun str(k: String): String? = Regex(""""$k"\s*:\s*"((?:[^"\\]|\\.)*)"""")
+            .find(json)?.groupValues?.get(1)
+            ?.replace("\\\"", "\"")?.replace("\\\\", "\\")
+        fun num(k: String): Float? = Regex(""""$k"\s*:\s*(-?[\d.]+)""")
+            .find(json)?.groupValues?.get(1)?.toFloatOrNull()
+        fun int(k: String): Int? = Regex(""""$k"\s*:\s*(-?\d+)""")
+            .find(json)?.groupValues?.get(1)?.toIntOrNull()
+        fun arr(k: String): List<String> {
+            val outer = Regex(""""$k"\s*:\s*(\[[\s\S]*?\])""").find(json)?.groupValues?.get(1) ?: return emptyList()
+            return Regex(""""([^"]*)"""").findAll(outer).map { it.groupValues[1] }.toList()
+        }
+        return com.lingshu.feature.clonevoice.domain.VoicePresetFile(
+            formatVersion = int("formatVersion") ?: 1,
+            name = str("name") ?: "未命名",
+            author = str("author") ?: "Anonymous",
+            description = str("description") ?: "",
+            tags = arr("tags"),
+            voiceName = str("voiceName"),
+            pitch = num("pitch") ?: 1.0f,
+            rate = num("rate") ?: 1.0f,
+            sampleBase64 = str("sampleBase64"),
+            createdAt = int("createdAt")?.toLong() ?: System.currentTimeMillis()
+        )
+    }
+
+    private fun toPresetJson(p: com.lingshu.feature.clonevoice.domain.VoicePresetFile): String {
+        fun esc(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"")
+        val tags = p.tags.joinToString(",") { "\"${esc(it)}\"" }
+        val sb = StringBuilder().append("{\n")
+            .append("  \"formatVersion\": ${p.formatVersion},\n")
+            .append("  \"name\": \"${esc(p.name)}\",\n")
+            .append("  \"author\": \"${esc(p.author)}\",\n")
+            .append("  \"description\": \"${esc(p.description)}\",\n")
+            .append("  \"tags\": [$tags],\n")
+            .append("  \"voiceName\": ${p.voiceName?.let { "\"${esc(it)}\"" } ?: "null"},\n")
+            .append("  \"pitch\": ${p.pitch},\n")
+            .append("  \"rate\": ${p.rate},\n")
+            .append("  \"createdAt\": ${p.createdAt}\n")
+            .append("}")
+        return sb.toString()
     }
 
     private fun formatDate(ts: Long): String {
